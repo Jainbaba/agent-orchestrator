@@ -13,7 +13,7 @@ type ChatHistoryMode uint8
 const (
 	ChatHistoryImport ChatHistoryMode = iota
 	ChatHistoryRequired
-	// ChatHistoryDeferred is used when agent switching owns later projection.
+	// ChatHistoryDeferred is used when later projection is intentionally deferred.
 	ChatHistoryDeferred
 )
 

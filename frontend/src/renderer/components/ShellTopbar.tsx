@@ -42,10 +42,6 @@ import { StatusPill } from "./StatusPill";
 import { TopbarActionError, TopbarButton, topbarHeaderClass, topbarProjectLabelClass } from "./TopbarButton";
 import { SessionArchiveDialog } from "./SessionArchiveDialog";
 import { TopbarOpenEditorButton } from "./TopbarOpenEditorButton";
-import {
-	agentSwitchStatusVisual,
-	deriveSessionAgentSwitchPresentation,
-} from "../lib/agent-switch-presentation";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { CueRunMenu } from "./chat/CueRunMenu";
 
@@ -495,19 +491,6 @@ function ProjectTerminationFeedback({ projectId }: { projectId: string | undefin
 }
 function SessionStatusPill({ session }: { session: WorkspaceSession }) {
 	const { t } = useTranslation();
-	const switchPresentation = deriveSessionAgentSwitchPresentation(session);
-	if (switchPresentation) {
-		const visual = agentSwitchStatusVisual(switchPresentation);
-		return (
-			<StatusPill
-				label={t(switchPresentation.compactLabelKey, switchPresentation.values)}
-				tone={visual.tone}
-				breathe={visual.breathe}
-				leading="none"
-				className="px-2 py-1 text-micro"
-			/>
-		);
-	}
 	const { label, tone, breathe } = getAgentActivityView(session.activity, t);
 	return (
 		<StatusPill label={label} tone={tone} breathe={breathe} leading="none" className="px-2 py-1 text-micro" />

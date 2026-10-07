@@ -568,7 +568,7 @@ describe("ChatWorkspace timeline", () => {
 		expect(url.searchParams.get("path")).toBe("docs/screenshot.png");
 	});
 
-	it("makes composer and history controls inert while a durable agent switch owns input", () => {
+	it("makes composer and history controls inert while a durable transition owns input", () => {
 		render(<ChatWorkspace snapshot={idleSnapshot()} agentInputDisabled />);
 
 		expect(screen.getByTestId("chat-conversation-panel")).toHaveAttribute("inert");

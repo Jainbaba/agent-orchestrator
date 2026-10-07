@@ -11,11 +11,8 @@
 --   2026-06-28 10:45:08.349363 +0000 UTC
 --
 -- activity_last_at is compared directly in SQL, and those comparisons are
--- lexicographic. A "+0800" wall clock sorts above the UTC rendering of a LATER
--- instant, so the agent-switch source-stop predicate
--- (activity_last_at <= stopped_at) silently matched zero rows: the confirmation
--- reported a phantom concurrent ownership change and stranded the saga in
--- stopping_source, where neither resume nor a repeat switch could recover it.
+-- lexicographic. A "+0800" wall clock sorts above the UTC rendering of a later
+-- instant, so an ownership predicate could silently match zero rows.
 --
 -- Shift each affected row back to UTC and re-render it in the canonical form.
 -- Rows already ending in "+0000 UTC" are untouched.

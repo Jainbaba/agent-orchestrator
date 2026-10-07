@@ -1559,24 +1559,6 @@ func (q *Queries) ReserveQueuedConversationTurnForPromotion(ctx context.Context,
 	return result.RowsAffected()
 }
 
-const resetConversationAgentOverridesForSession = `-- name: ResetConversationAgentOverridesForSession :exec
-UPDATE conversations
-SET model = NULL, reasoning_effort = NULL, updated_at = ?
-WHERE current_session_id = ?
-`
-
-type ResetConversationAgentOverridesForSessionParams struct {
-	UpdatedAt        time.Time
-	CurrentSessionID *domain.SessionID
-}
-
-// An agent switch starts a new provider/model scope. Clear only the source
-// harness choices; approval posture is AO-owned and remains applicable.
-func (q *Queries) ResetConversationAgentOverridesForSession(ctx context.Context, arg ResetConversationAgentOverridesForSessionParams) error {
-	_, err := q.db.ExecContext(ctx, resetConversationAgentOverridesForSession, arg.UpdatedAt, arg.CurrentSessionID)
-	return err
-}
-
 const resolveConversationApproval = `-- name: ResolveConversationApproval :exec
 UPDATE conversation_activities
 SET status = 'resolved',
@@ -2356,8 +2338,8 @@ type SelectConversationEditAnchorRow struct {
 // provider events. The previous provider turn is the fork target; it is empty for
 // the first prompt, which tells the service to start a fresh provider thread.
 // A provider boundary is the nearest ancestor that is either the root or has no
-// replaced turn. Agent switching creates the latter kind: older AO history stays
-// visible, but its provider turn ids can never be sent to the new driver.
+// replaced turn. Older AO history stays visible, but provider turn ids outside
+// the active boundary can never be sent to the current driver.
 func (q *Queries) SelectConversationEditAnchor(ctx context.Context, arg SelectConversationEditAnchorParams) (SelectConversationEditAnchorRow, error) {
 	row := q.db.QueryRowContext(ctx, selectConversationEditAnchor, arg.ConversationID, arg.ReplacedTurnID)
 	var i SelectConversationEditAnchorRow

@@ -68,7 +68,6 @@ const {
 	setKeybindings: vi.fn(),
 	setKeybindingRecording: vi.fn(),
 	setMacDifferentialUpdates: vi.fn().mockResolvedValue(undefined),
-	// agent-switch visibility initializes at module load, before beforeEach can
 	// install the per-test policy response. Preserve the bridge's Promise
 	// contract for that initial read as well.
 	getTelemetryPolicy: vi.fn().mockResolvedValue(undefined),

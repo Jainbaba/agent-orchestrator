@@ -854,7 +854,7 @@ func TestReviewerChatUsesItsOwnProviderHost(t *testing.T) {
 	}
 }
 
-func TestPendingAgentSwitchFreshStartUsesReservedProviderScope(t *testing.T) {
+func TestPendingProviderHandoffFreshStartUsesReservedProviderScope(t *testing.T) {
 	st := openStore(t)
 	now := time.Date(2026, 8, 21, 10, 0, 0, 0, time.UTC)
 	record, found, err := st.GetSession(context.Background(), testSession)
@@ -893,7 +893,7 @@ func TestPendingAgentSwitchFreshStartUsesReservedProviderScope(t *testing.T) {
 	}
 }
 
-func TestPendingAgentSwitchResumeUsesReservedProviderScope(t *testing.T) {
+func TestPendingProviderHandoffResumeUsesReservedProviderScope(t *testing.T) {
 	st := openStore(t)
 	now := time.Date(2026, 8, 21, 11, 0, 0, 0, time.UTC)
 	record, found, err := st.GetSession(context.Background(), testSession)
@@ -2735,7 +2735,7 @@ func TestInterfaceHandoffDoesNotAnchorReplayBeforeProviderCoordinationBoundary(t
 	}
 
 	// This completed turn belongs to the provider that owned the session before
-	// the agent switch. The new provider receives it through hidden handoff
+	// the provider handoff. The new provider receives it through hidden handoff
 	// instructions, so its native thread cannot replay the old provider IDs.
 	created, err := st.AppendUserMessage(context.Background(), existing.ID, testSession, "old-generation",
 		domain.ConversationMessage{

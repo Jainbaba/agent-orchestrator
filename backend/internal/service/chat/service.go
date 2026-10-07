@@ -519,7 +519,7 @@ func (s *Service) Start(ctx context.Context, cfg StartConfig) (*Controller, erro
 		conversation.ActiveBranchID = repairedBranch.ID
 		// An ordinary restart was handed the abandoned child's provider handle.
 		// A coordinator-supplied scope belongs to a pending provider boundary (for
-		// example, agent switching) and must keep its independently reserved handle.
+		// example, a pending provider boundary) and must keep its independently reserved handle.
 		if restoredProviderOwner && cfg.ProviderScopeID == "" {
 			cfg.ProviderConversationID = repairedBranch.ProviderConversationID
 		}

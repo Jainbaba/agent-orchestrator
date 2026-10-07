@@ -268,7 +268,7 @@ type RuntimeProcessRootInspector interface {
 }
 
 // ExactSupervisedProcessInspector is the strict launch-generation probe used
-// at agent-switch ownership boundaries. Unlike SupervisedProcessInspector it
+// at runtime ownership boundaries. Unlike SupervisedProcessInspector it
 // must never treat an arbitrary child of a preserved shell as the requested
 // AO supervisor. A true result proves the exact session/launch pair and the
 // supervisor's managed agent child are both alive.

@@ -20,10 +20,6 @@ import { formatTimeCompact } from "../lib/format-time";
 import { formatEstimatedCost } from "../lib/format-cost";
 import { formatTokenCount } from "../lib/format-token-count";
 import { prBrowserUrl, sessionPRDisplaySummaries } from "../lib/pr-display";
-import {
-	agentSwitchStatusVisual,
-	deriveSessionAgentSwitchPresentation,
-} from "../lib/agent-switch-presentation";
 import { agentLabel } from "../lib/agent-options";
 import type { WorkspaceSession } from "../types/workspace";
 import { canonicalTrackerIssueId } from "../types/workspace";
@@ -45,8 +41,6 @@ export function toBoardSessionPresentation(
 	session: WorkspaceSession,
 	t?: TFunction,
 ): BoardSessionPresentation {
-	const switchPresentation = deriveSessionAgentSwitchPresentation(session);
-	const switchVisual = switchPresentation ? agentSwitchStatusVisual(switchPresentation) : undefined;
 	const provisioningStatus =
 		session.provisionState === "provisioning"
 			? {
@@ -66,16 +60,7 @@ export function toBoardSessionPresentation(
 		provider: session.provider,
 		status: session.status,
 		statusReadiness: session.statusReadiness,
-		statusPresentation:
-			provisioningStatus ??
-			(t && switchPresentation && switchVisual
-				? {
-						className: switchVisual.className,
-						indicatorClassName: `${switchVisual.indicatorClassName}${switchVisual.breathe ? " animate-status-pulse" : ""}`,
-						label: t(switchPresentation.compactLabelKey, switchPresentation.values),
-						tone: switchVisual.tone,
-					}
-				: undefined),
+		statusPresentation: provisioningStatus,
 		title: session.title,
 		trackerIssueId: canonicalTrackerIssueId(session.issueId),
 		updatedAt: session.updatedAt,

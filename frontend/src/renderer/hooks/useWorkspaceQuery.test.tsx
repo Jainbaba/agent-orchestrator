@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { appI18n } from "../i18n";
 import type { WorkspaceSummary } from "../types/workspace";
 
-const { captureRendererEventMock, cloudState, getMock, hasTrustedApiBaseUrlMock, listProjectsMock, listSessionsMock, remoteGetMock, setQueryHealthyMock } = vi.hoisted(
+const { captureRendererEventMock, cloudState, getMock, hasTrustedApiBaseUrlMock, listProjectsMock, listSessionsMock, remoteGetMock } = vi.hoisted(
 	() => ({
 		captureRendererEventMock: vi.fn().mockResolvedValue(undefined),
 		cloudState: { ready: false, org: undefined as { id: string } | undefined },
@@ -14,7 +14,6 @@ const { captureRendererEventMock, cloudState, getMock, hasTrustedApiBaseUrlMock,
 		listProjectsMock: vi.fn(),
 		listSessionsMock: vi.fn(),
 		remoteGetMock: vi.fn(),
-		setQueryHealthyMock: vi.fn(),
 	}),
 );
 
@@ -24,7 +23,6 @@ vi.mock("../lib/api-client", () => ({
 }));
 
 vi.mock("../lib/telemetry", () => ({ captureRendererEvent: captureRendererEventMock }));
-vi.mock("../lib/agent-switch-visibility", () => ({ agentSwitchVisibility: { setQueryHealthy: setQueryHealthyMock } }));
 vi.mock("../lib/host-clients", () => ({ clientForHost: () => ({ GET: remoteGetMock }), connectedHosts: () => [], subscribeConnectedHosts: () => () => undefined }));
 
 vi.mock("./useCloudCp", () => ({
@@ -72,7 +70,6 @@ beforeEach(() => {
 	listProjectsMock.mockReset();
 	listSessionsMock.mockReset().mockResolvedValue({ items: [] });
 	remoteGetMock.mockReset();
-	setQueryHealthyMock.mockReset();
 });
 
 describe("useWorkspaceQuery", () => {
@@ -135,21 +132,6 @@ describe("useWorkspaceQuery", () => {
 							autoInjectReview: false,
 							autoInjectCI: false,
 							activity: { state: "idle", lastActivityAt: "2026-06-10T15:30:00Z" },
-							activeAgentSwitch: {
-								agentHandoffStatus: "received",
-								errorCode: "delivery_unconfirmed",
-								fromHarness: "claude-code",
-								id: "switch-1",
-								privateFutureField: "must-not-leak",
-								requestedAt: "2026-06-10T15:31:00Z",
-								semanticHandoffIncluded: true,
-								sessionId: "sess-1",
-								sourceTranscriptStatus: "available",
-								state: "delivering_context",
-								targetHarness: "codex",
-								targetStartMode: "resumed",
-								updatedAt: "2026-06-10T15:32:00Z",
-							},
 							lastUserMessageAt: "2026-06-10T16:10:00Z",
 							updatedAt: "2026-06-10T16:15:04Z",
 						},
@@ -200,15 +182,6 @@ describe("useWorkspaceQuery", () => {
 			lastUserMessageAt: "2026-06-10T16:10:00Z",
 			autoInjectReview: false,
 			autoInjectCI: false,
-		});
-		expect(workspace.sessions[0].activeAgentSwitch).toEqual({
-			agentHandoffStatus: "received",
-			errorCode: "delivery_unconfirmed",
-			fromHarness: "claude-code",
-			id: "switch-1",
-			state: "delivering_context",
-			targetHarness: "codex",
-			updatedAt: "2026-06-10T15:32:00Z",
 		});
 		expect(workspace.sessions[1]).toMatchObject({
 			id: "sess-2",

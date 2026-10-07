@@ -1,4 +1,4 @@
-export const AGENT_SWITCH_FAILURE_PRODUCTION_ENABLED = false;
+export const TELEMETRY_PRODUCTION_ENABLED = false;
 
 export type TelemetryPolicyDiskRecord = {
 	schema_version: 2;
@@ -22,7 +22,7 @@ export type TelemetryPolicyView = TelemetryPolicySnapshot & {
 	state: TelemetryPolicyApplyState;
 	environmentVeto: boolean;
 	durabilitySupported: boolean;
-	reason?: "environment_veto" | "durability_unsupported" | "release_blocked" | "invalid_authority" | "daemon_cleanup_pending" | "cleanup_failed";
+	reason?: "environment_veto" | "durability_unsupported" | "release_blocked" | "invalid_authority" | "cleanup_failed";
 };
 
 export type RendererTelemetryCapture = {

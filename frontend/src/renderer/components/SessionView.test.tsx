@@ -229,23 +229,12 @@ vi.mock("./ShellTopbar", () => ({
 vi.mock("./NotificationCenter", () => ({
 	NotificationCenter: () => <button type="button">Notifications</button>,
 }));
-vi.mock("../hooks/useSessionHandoffMenu", () => ({
-	useSessionHandoffMenu: () => ({
-		agentSwitch: undefined,
-		switchControlPresentation: undefined,
-		switchError: null,
-	}),
-}));
 vi.mock("../hooks/useSettings", () => ({
 	useSettings: () => ({
 		settings: settingsState.chatHarnesses ? { chatHarnesses: settingsState.chatHarnesses } : undefined,
 		isLoading: false,
 		error: undefined,
 	}),
-}));
-vi.mock("./TerminalSwitchAgentButton", () => ({
-	TerminalSwitchAgentButton: ({ variant }: { variant?: "icon" | "menu-item" }) =>
-		variant === "menu-item" ? <div role="menuitem">Switch agent</div> : <button aria-label="Switch agent" type="button" />,
 }));
 vi.mock("./chat/SessionChatSurface", async () => {
 	const { memo } = await vi.importActual<typeof import("react")>("react");
@@ -3565,20 +3554,6 @@ describe("SessionView", () => {
 
 		await userEvent.click(screen.getByRole("button", { name: "Session actions" }));
 		expect(screen.getByRole("menuitem", { name: "Switch to chat UI" })).toBeInTheDocument();
-		expect(screen.getByRole("menuitem", { name: "Switch agent" })).toBeInTheDocument();
-	});
-
-	it("hides unsupported agent switching from a cloud session menu", async () => {
-		interfaceTransitionState.status = { supported: true, targetMode: "chat" };
-		const session = workerSession("sess-2");
-		session.mode = "tui";
-		session.cloud = { orgId: "cloud-org", desiredState: "running", observedState: "running" };
-		session.runtimeConnected = true;
-		render(<SessionView sessionId="sess-2" />);
-
-		await userEvent.click(screen.getByRole("button", { name: "Session actions" }));
-		expect(screen.getByRole("menuitem", { name: "Switch to chat UI" })).toBeInTheDocument();
-		expect(screen.queryByRole("menuitem", { name: "Switch agent" })).not.toBeInTheDocument();
 	});
 
 	it("shows the switch button when the adapter only reports a generic unsupported reason", async () => {

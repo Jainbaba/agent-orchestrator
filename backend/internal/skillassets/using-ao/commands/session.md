@@ -220,54 +220,6 @@ ao session resume-agent mer-3
 
 ---
 
-### ao session switch-agent
-
-Switch a running session to another installed agent harness. This preserves the
-AO session while provisioning the target harness.
-
-**Syntax:**
-```
-ao session switch-agent <id> <target-harness> [flags]
-```
-
-**Flags:**
-
-| Flag | Meaning | Default / Required |
-|---|---|---|
-| `--idempotency-key string` | Reuse a prior identical switch request safely | - |
-| `--json` | Output the agent switch as JSON | - |
-
-**Examples:**
-
-```bash
-ao session switch-agent mer-3 codex
-```
-
----
-
-### ao session agent-switch ls
-
-List agent-harness switches recorded for a session. Alias: `agent-switches`.
-
-**Syntax:**
-```
-ao session agent-switch ls <session-id> [flags]
-```
-
-**Flags:**
-
-| Flag | Meaning | Default / Required |
-|---|---|---|
-| `--json` | Output agent switches as JSON | - |
-
-**Examples:**
-
-```bash
-ao session agent-switch ls mer-3
-```
-
----
-
 ### ao session cleanup
 
 Clean up terminated sessions by reclaiming eligible workspaces. Dirty worktrees are skipped by the daemon.

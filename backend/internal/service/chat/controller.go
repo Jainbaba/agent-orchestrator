@@ -310,7 +310,7 @@ var ErrRetryDeliveryUncertain = errors.New("turn was never confirmed as delivere
 var ErrRetryContentInvalid = errors.New("stored retry content is invalid")
 
 // ErrRetryUnsupported reports structured prompt content the current provider
-// cannot accept. This can happen after an in-place agent switch: the failed
+// cannot accept. This can happen after a provider capability change: the failed
 // prompt remains visible, but the new provider may negotiate fewer capabilities.
 var ErrRetryUnsupported = errors.New("current agent cannot retry this prompt content")
 
@@ -503,7 +503,7 @@ func (p *nativeHistoryCheckpoint) captureAOHighWater(
 		turnsByID[turns[i].ID] = &turns[i]
 	}
 	p.dropUnsettledHookFacts(turnsByID, messages)
-	// An agent switch starts a new provider-native thread with an AO coordination
+	// A provider boundary starts a new provider-native thread with an AO coordination
 	// turn. Completed turns before it belong to the previous provider: their
 	// opaque ids remain useful timeline facts, but the new provider cannot replay
 	// them and they must not gate this native-history import.

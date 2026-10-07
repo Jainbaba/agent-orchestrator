@@ -320,7 +320,7 @@ func TestWiring_StartSessionBuildsSessionService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildAgentResolver: %v", err)
 	}
-	svc, reviewSvc, lc, err := startSession(context.Background(), cfg, rt, store, lcm, messenger, telemetryadapter.NoopSink{}, nil, agents, nil, nil, nil, nil, nil, nil, nil, nil, nil, log)
+	svc, reviewSvc, lc, err := startSession(context.Background(), cfg, rt, store, lcm, messenger, telemetryadapter.NoopSink{}, nil, agents, nil, nil, nil, nil, nil, nil, nil, nil, log)
 	if err != nil {
 		t.Fatalf("startSession: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestWiring_StartSessionSpawnsScratchWithoutGitRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildAgentResolver: %v", err)
 	}
-	svc, _, _, err := startSession(context.Background(), cfg, runtime, store, lcm, messenger, telemetryadapter.NoopSink{}, nil, agents, nil, nil, nil, nil, nil, nil, nil, nil, nil, log)
+	svc, _, _, err := startSession(context.Background(), cfg, runtime, store, lcm, messenger, telemetryadapter.NoopSink{}, nil, agents, nil, nil, nil, nil, nil, nil, nil, nil, log)
 	if err != nil {
 		t.Fatalf("startSession: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestStartSession_SpawnDoesNotPanicWhenNoTrackerToken(t *testing.T) {
 	if agentsErr != nil {
 		t.Fatalf("buildAgentResolver: %v", agentsErr)
 	}
-	svc, _, _, err := startSession(context.Background(), cfg, rt, store, lcm, messenger, telemetryadapter.NoopSink{}, nil, agents, nil, nil, nil, nil, nil, nil, nil, nil, nil, log)
+	svc, _, _, err := startSession(context.Background(), cfg, rt, store, lcm, messenger, telemetryadapter.NoopSink{}, nil, agents, nil, nil, nil, nil, nil, nil, nil, nil, log)
 	if err != nil {
 		t.Fatalf("startSession: %v", err)
 	}
@@ -472,7 +472,7 @@ func TestStartTrackerIntake_RunsEvenWithoutEnabledProjects(t *testing.T) {
 	if agentsErr != nil {
 		t.Fatalf("buildAgentResolver: %v", agentsErr)
 	}
-	svc, _, _, err := startSession(context.Background(), cfg, rt, store, lcm, messenger, telemetryadapter.NoopSink{}, nil, agents, nil, nil, nil, nil, nil, nil, nil, nil, nil, log)
+	svc, _, _, err := startSession(context.Background(), cfg, rt, store, lcm, messenger, telemetryadapter.NoopSink{}, nil, agents, nil, nil, nil, nil, nil, nil, nil, nil, log)
 	if err != nil {
 		t.Fatalf("startSession: %v", err)
 	}
@@ -902,57 +902,6 @@ type fakeSessionLifecycle struct {
 	restoreErr                error
 }
 
-type recordingAgentSwitchDaemonFaultStore struct {
-	inputs []ports.AgentSwitchDaemonFault
-}
-
-func (s *recordingAgentSwitchDaemonFaultStore) EnqueueAgentSwitchDaemonFault(_ context.Context, input ports.AgentSwitchDaemonFault) (ports.AgentSwitchMutationResult, error) {
-	s.inputs = append(s.inputs, input)
-	return ports.AgentSwitchMutationResult{Enrollment: domain.AgentSwitchEnrollmentEnrolled}, nil
-}
-
-type fixedAgentSwitchReportingPolicy struct {
-	authorization domain.AgentSwitchReportingAuthorization
-}
-
-func (p fixedAgentSwitchReportingPolicy) Authorization() domain.AgentSwitchReportingAuthorization {
-	return p.authorization
-}
-
-func TestEnqueueAgentSwitchWorkerShutdownTimeoutCreatesOneDaemonAggregate(t *testing.T) {
-	store := &recordingAgentSwitchDaemonFaultStore{}
-	authorization := domain.AgentSwitchReportingAuthorization{
-		Enabled: true, ConsentGeneration: "consent-generation", DestinationFingerprint: "destination-fingerprint",
-	}
-	at := time.Date(2026, 8, 28, 10, 0, 0, 0, time.UTC)
-	if err := enqueueAgentSwitchWorkerShutdownTimeout(context.Background(), store, fixedAgentSwitchReportingPolicy{authorization}, "daemon-run-1", at); err != nil {
-		t.Fatalf("enqueue shutdown timeout: %v", err)
-	}
-	if len(store.inputs) != 1 {
-		t.Fatalf("daemon fault inputs = %d, want 1", len(store.inputs))
-	}
-	got := store.inputs[0]
-	if got.DaemonRunID != "daemon-run-1" || got.Authorization != authorization {
-		t.Fatalf("daemon fault scope = %+v", got)
-	}
-	if got.Fault.ReportKind != domain.AgentSwitchReportDaemonLifecycleFailure ||
-		got.Fault.FailurePoint != domain.AgentSwitchFailureShutdownWorkerTimeout ||
-		got.Fault.FaultCode != domain.AgentSwitchFaultShutdownWorkersTimedOut ||
-		got.Fault.Execution != domain.AgentSwitchExecutionDaemonShutdown ||
-		got.Fault.CallOutcome != domain.AgentSwitchCallTimedOut {
-		t.Fatalf("daemon fault = %+v", got.Fault)
-	}
-}
-
-func TestAgentSwitchWorkerWaitCancellationIsNotReportable(t *testing.T) {
-	if agentSwitchWorkerWaitTimedOut(context.Canceled) {
-		t.Fatal("ordinary shutdown cancellation was classified as a timeout")
-	}
-	if !agentSwitchWorkerWaitTimedOut(context.DeadlineExceeded) {
-		t.Fatal("worker deadline was not classified as a timeout")
-	}
-}
-
 func (f *fakeSessionLifecycle) Send(context.Context, domain.SessionID, string, *ports.SpawnAttachment) error {
 	return nil
 }
@@ -981,8 +930,7 @@ func (f *fakeSessionLifecycle) RestoreAll(_ context.Context) error {
 	return f.restoreErr
 }
 
-func (*fakeSessionLifecycle) WaitAgentSwitchWorkers(context.Context) error { return nil }
-func (*fakeSessionLifecycle) WaitBackgroundWorkers(context.Context) error  { return nil }
+func (*fakeSessionLifecycle) WaitBackgroundWorkers(context.Context) error { return nil }
 
 func (f *fakeSessionLifecycle) SetShellTerminalCloser(sessionmanager.ShellTerminalCloser) {}
 func (f *fakeSessionLifecycle) SetTerminalInputGate(sessionmanager.TerminalInputGate)     {}
@@ -1003,7 +951,8 @@ func (f *fakeSessionLifecycle) RecoverCodexAccountSwitch(context.Context, string
 func (f *fakeSessionLifecycle) GetActiveCodexAccountSwitch(context.Context) (domain.CodexAccountSwitch, bool, error) {
 	return domain.CodexAccountSwitch{}, false, nil
 }
-func (f *fakeSessionLifecycle) SetCodexAccountSwitchObserver(func()) {}
+func (f *fakeSessionLifecycle) SetCodexAccountSwitchObserver(func())               {}
+func (f *fakeSessionLifecycle) WaitInterfaceRecoveryWorkers(context.Context) error { return nil }
 func (f *fakeSessionLifecycle) PersistChatModel(_ context.Context, _ domain.SessionID, _ string) error {
 	return nil
 }

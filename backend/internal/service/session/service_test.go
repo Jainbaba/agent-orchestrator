@@ -2,7 +2,6 @@ package session
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -63,9 +62,6 @@ func (f *fakeAgentReadiness) RecheckAgent(agentID string) {
 type fakeStore struct {
 	sessions            map[domain.SessionID]domain.SessionRecord
 	getSessionErr       error
-	activeSwitches      map[domain.SessionID]domain.AgentSwitch
-	activeSwitchGetErr  error
-	activeSwitchListErr error
 	pr                  map[domain.SessionID]domain.PRFacts
 	prFacts             map[domain.SessionID][]domain.PRFacts
 	prs                 map[domain.SessionID][]domain.PullRequest
@@ -87,7 +83,6 @@ type fakeStore struct {
 func newFakeStore() *fakeStore {
 	return &fakeStore{
 		sessions:       map[domain.SessionID]domain.SessionRecord{},
-		activeSwitches: map[domain.SessionID]domain.AgentSwitch{},
 		pr:             map[domain.SessionID]domain.PRFacts{},
 		prFacts:        map[domain.SessionID][]domain.PRFacts{},
 		prs:            map[domain.SessionID][]domain.PullRequest{},
@@ -152,24 +147,6 @@ func TestTaskPreparationsStayOutOfSessionReads(t *testing.T) {
 	}
 }
 
-func (f *fakeStore) GetActiveAgentSwitch(_ context.Context, id domain.SessionID) (domain.AgentSwitch, bool, error) {
-	if f.activeSwitchGetErr != nil {
-		return domain.AgentSwitch{}, false, f.activeSwitchGetErr
-	}
-	sw, ok := f.activeSwitches[id]
-	return sw, ok, nil
-}
-
-func (f *fakeStore) ListActiveAgentSwitches(context.Context) ([]domain.AgentSwitch, error) {
-	if f.activeSwitchListErr != nil {
-		return nil, f.activeSwitchListErr
-	}
-	out := make([]domain.AgentSwitch, 0, len(f.activeSwitches))
-	for _, sw := range f.activeSwitches {
-		out = append(out, sw)
-	}
-	return out, nil
-}
 
 func newWorkspaceRepo(t testing.TB) string {
 	t.Helper()
@@ -517,42 +494,6 @@ func TestSessionListAppliesActivityBeforePRFacts(t *testing.T) {
 	}
 }
 
-func TestSessionListProjectsActiveAgentSwitch(t *testing.T) {
-	st := newFakeStore()
-	st.sessions["mer-1"] = domain.SessionRecord{ID: "mer-1", ProjectID: "mer", Activity: domain.Activity{State: domain.ActivityExited}}
-	st.sessions["other-1"] = domain.SessionRecord{ID: "other-1", ProjectID: "other", Activity: domain.Activity{State: domain.ActivityIdle}}
-	st.activeSwitches["mer-1"] = domain.AgentSwitch{
-		ID: "switch-1", SessionID: "mer-1", FromHarness: domain.HarnessClaudeCode,
-		TargetHarness: domain.HarnessCodex, State: domain.AgentSwitchPreparingHandoff,
-	}
-	st.activeSwitches["other-1"] = domain.AgentSwitch{ID: "switch-other", SessionID: "other-1", State: domain.AgentSwitchPreparingHandoff}
-
-	list, err := (&Service{store: st}).List(context.Background(), ListFilter{ProjectID: "mer"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(list) != 1 || list[0].ActiveAgentSwitch == nil || list[0].ActiveAgentSwitch.ID != "switch-1" {
-		t.Fatalf("list active switch projection = %+v", list)
-	}
-	if list[0].Status != domain.StatusExited {
-		t.Fatalf("session status = %q, want durable activity-derived exited", list[0].Status)
-	}
-	got, err := (&Service{store: st}).Get(context.Background(), "mer-1")
-	if err != nil || got.ActiveAgentSwitch == nil || got.ActiveAgentSwitch.ID != "switch-1" {
-		t.Fatalf("get active switch projection = %+v, err=%v", got.ActiveAgentSwitch, err)
-	}
-
-	st.activeSwitchListErr = errors.New("active switch read failed")
-	if _, err := (&Service{store: st}).List(context.Background(), ListFilter{ProjectID: "mer"}); err == nil || !strings.Contains(err.Error(), "active switch") {
-		t.Fatalf("active switch list error = %v", err)
-	}
-
-	st.activeSwitchListErr = nil
-	st.activeSwitchGetErr = errors.New("active switch read failed")
-	if _, err := (&Service{store: st}).Get(context.Background(), "mer-1"); err == nil || !strings.Contains(err.Error(), "active switch") {
-		t.Fatalf("active switch get error = %v", err)
-	}
-}
 
 func TestSessionRenameUpdatesDisplayName(t *testing.T) {
 	st := newFakeStore()
@@ -2591,19 +2532,6 @@ func (*fakeCommander) PrepareTaskWorkspace(context.Context, domain.ProjectRecord
 func (*fakeCommander) CancelTaskPreparation(context.Context, domain.TaskPreparationToken) error {
 	return nil
 }
-func (*fakeCommander) SwitchAgent(context.Context, domain.SessionID, sessionmanager.SwitchAgentConfig) (domain.AgentSwitch, error) {
-	return domain.AgentSwitch{}, nil
-}
-
-func (*fakeCommander) RecoverAgentSwitch(context.Context, domain.SessionID, domain.AgentSwitchID) (domain.AgentSwitch, error) {
-	return domain.AgentSwitch{}, nil
-}
-func (*fakeCommander) ListAgentSwitches(context.Context, domain.SessionID) ([]domain.AgentSwitch, error) {
-	return nil, nil
-}
-func (*fakeCommander) SubmitAgentHandoff(context.Context, domain.SessionID, domain.AgentSwitchID, domain.AgentGenerationID, json.RawMessage) (domain.AgentSwitch, error) {
-	return domain.AgentSwitch{}, nil
-}
 func (f *fakeCommander) RestoreWithMode(context.Context, domain.SessionID) (sessionmanager.RestoreResult, error) {
 	if f.restoreErr != nil {
 		return sessionmanager.RestoreResult{}, f.restoreErr
@@ -3580,19 +3508,6 @@ func TestToAPIErrorMapsWorkspaceBranchSentinels(t *testing.T) {
 		{"agent not exited", fmt.Errorf("resume agent mer-1: %w", sessionmanager.ErrAgentNotExited), apierr.KindConflict, "AGENT_NOT_EXITED"},
 		{"resume in progress", fmt.Errorf("resume agent mer-1: %w", sessionmanager.ErrResumeInProgress), apierr.KindConflict, "AGENT_RESUME_IN_PROGRESS"},
 		{"provider resume failed", fmt.Errorf("resume agent mer-1: %w", ports.ErrChatResumeFailed), apierr.KindConflict, "CHAT_RESUME_FAILED"},
-		{"target agent unauthorized", fmt.Errorf("switch agent mer-1: %w", sessionmanager.ErrTargetAgentUnauthorized), apierr.KindInvalid, "TARGET_AGENT_UNAUTHORIZED"},
-		{"worker session required", fmt.Errorf("switch agent mer-orchestrator: %w", sessionmanager.ErrUnsupportedSwitchKind), apierr.KindInvalid, "WORKER_SESSION_REQUIRED"},
-		{"unsupported switch harness", fmt.Errorf("switch agent mer-1: %w", sessionmanager.ErrUnsupportedSwitchHarness), apierr.KindInvalid, "UNSUPPORTED_SWITCH_HARNESS"},
-		{"already using harness", fmt.Errorf("switch agent mer-1: %w", sessionmanager.ErrAlreadyUsingHarness), apierr.KindConflict, "ALREADY_USING_HARNESS"},
-		{"switch not found", fmt.Errorf("get switch: %w", sessionmanager.ErrSwitchNotFound), apierr.KindNotFound, "AGENT_SWITCH_NOT_FOUND"},
-		{"stale handoff", fmt.Errorf("submit handoff: %w", sessionmanager.ErrStaleHandoff), apierr.KindConflict, "STALE_AGENT_HANDOFF"},
-		{"invalid handoff", fmt.Errorf("submit handoff: %w", sessionmanager.ErrInvalidAgentHandoff), apierr.KindInvalid, "INVALID_AGENT_HANDOFF"},
-		{"switch delivery unconfirmed", fmt.Errorf("switch agent mer-1: %w", sessionmanager.ErrSwitchDeliveryUnconfirmed), apierr.KindConflict, "AGENT_SWITCH_DELIVERY_UNCONFIRMED"},
-		{"manager switch in progress", fmt.Errorf("switch agent mer-1: %w", sessionmanager.ErrSwitchInProgress), apierr.KindConflict, "AGENT_SWITCH_IN_PROGRESS"},
-		{"manager switch shutting down", fmt.Errorf("switch agent mer-1: %w", sessionmanager.ErrSwitchShuttingDown), apierr.KindConflict, "AGENT_SWITCH_UNAVAILABLE"},
-		{"manager switch unavailable", fmt.Errorf("switch agent mer-1: %w", sessionmanager.ErrSwitchUnavailable), apierr.KindConflict, "AGENT_SWITCH_UNAVAILABLE"},
-		{"switch in progress", fmt.Errorf("switch agent mer-1: %w", domain.ErrAgentSwitchInProgress), apierr.KindConflict, "AGENT_SWITCH_IN_PROGRESS"},
-		{"switch idempotency conflict", fmt.Errorf("switch agent mer-1: %w", domain.ErrAgentSwitchIdempotencyConflict), apierr.KindConflict, "AGENT_SWITCH_IDEMPOTENCY_CONFLICT"},
 		{"chat mode unsupported", fmt.Errorf("spawn: %w", ports.ErrChatUnsupported), apierr.KindConflict, "SESSION_MODE_UNSUPPORTED"},
 		{"chat driver unavailable", fmt.Errorf("spawn: %w", ports.ErrChatDriverUnavailable), apierr.KindConflict, "CHAT_DRIVER_UNAVAILABLE"},
 		{"chat driver incompatible", fmt.Errorf("spawn: %w", ports.ErrChatDriverIncompatible), apierr.KindConflict, "CHAT_DRIVER_INCOMPATIBLE"},
@@ -3760,42 +3675,6 @@ func TestToSpawnAPIErrorIsIdempotentForMappedErrors(t *testing.T) {
 	}
 }
 
-func TestToAPIErrorSwitchDeliveryUnconfirmedMessage(t *testing.T) {
-	err := fmt.Errorf("switch agent mer-1: confirm continuation: %w", sessionmanager.ErrSwitchDeliveryUnconfirmed)
-	mapped := toAPIError(err)
-
-	var apiError *apierr.Error
-	if !errors.As(mapped, &apiError) {
-		t.Fatalf("mapped = %v, want *apierr.Error", mapped)
-	}
-	if apiError.Kind != apierr.KindConflict {
-		t.Fatalf("kind = %v, want %v", apiError.Kind, apierr.KindConflict)
-	}
-	if apiError.Code != "AGENT_SWITCH_DELIVERY_UNCONFIRMED" {
-		t.Fatalf("code = %q, want AGENT_SWITCH_DELIVERY_UNCONFIRMED", apiError.Code)
-	}
-	const wantMessage = "The target agent started, but AO could not confirm that it accepted the continuation"
-	if apiError.Message != wantMessage {
-		t.Fatalf("message = %q, want %q", apiError.Message, wantMessage)
-	}
-}
-
-func TestToAPIErrorPreservesReportingOwnerAcrossMapping(t *testing.T) {
-	raw := ownership.Own(
-		fmt.Errorf("switch agent mer-1: %w", sessionmanager.ErrSwitchInProgress),
-		ownership.OwnerAgentSwitchSaga,
-	)
-
-	mapped := toAPIError(raw)
-
-	if got := ownership.OwnerOf(mapped); got != ownership.OwnerAgentSwitchSaga {
-		t.Fatalf("OwnerOf(mapped) = %q, want %q", got, ownership.OwnerAgentSwitchSaga)
-	}
-	var apiError *apierr.Error
-	if !errors.As(mapped, &apiError) || apiError.Code != "AGENT_SWITCH_IN_PROGRESS" {
-		t.Fatalf("mapped = %v, want AGENT_SWITCH_IN_PROGRESS", mapped)
-	}
-}
 
 func TestToAPIErrorDefaultsUnownedErrorsToHTTP(t *testing.T) {
 	mapped := toAPIError(errors.New("pre-admission storage unavailable"))

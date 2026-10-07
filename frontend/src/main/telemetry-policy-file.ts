@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import {
-	AGENT_SWITCH_FAILURE_PRODUCTION_ENABLED,
+	TELEMETRY_PRODUCTION_ENABLED,
 	parseTelemetryPolicyDiskRecord,
 	telemetryPolicySnapshot,
 	type TelemetryPolicyDiskRecord,
@@ -139,7 +139,7 @@ export class TelemetryPolicyAuthority {
 	}
 
 	private productionEnabled(): boolean {
-		return this.options.productionEnabled ?? AGENT_SWITCH_FAILURE_PRODUCTION_ENABLED;
+		return this.options.productionEnabled ?? TELEMETRY_PRODUCTION_ENABLED;
 	}
 
 	private snapshotOf(record: TelemetryPolicyDiskRecord, acknowledged: boolean): TelemetryPolicySnapshot {
