@@ -823,8 +823,14 @@ func (s *Service) startLocked(ctx context.Context, cfg StartConfig) (*Controller
 			ProviderConversationID: conv.ProviderConversationID(), ParentBranchID: activeBranch.ID,
 			ForkAfterSequence: conversation.LatestSequence, ProviderScopeID: providerScopeID,
 			ProviderBindingID: string(cfg.Harness),
+			Strategy:          domain.ConversationBranchStrategyNative,
 			ProviderIDsScoped: true,
 			CreatedAt:         s.now(),
+		}
+		if cfg.ProviderSwitch != nil {
+			providerBoundary.Strategy = domain.ConversationBranchStrategyApproximateContext
+			providerBoundary.ReplayCutoffSequence = cfg.ProviderSwitch.SourceSequence
+			providerBoundary.ReplayTruncated = true
 		}
 	}
 	// Whatever the previous controller left in flight is not this controller's, and

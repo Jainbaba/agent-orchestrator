@@ -667,9 +667,6 @@ describe("SessionChatSurface link routing", () => {
 		expect(screen.getByTestId("chat-new-work")).toHaveAttribute("data-disabled", "true");
 	});
 
-	it.each([
-		["workspace file", { workspaceFileActive: true }, undefined],
-		["conversation error", {}, "Could not load conversation"],
 	it("keeps a selected shell renderable when the conversation is unavailable", () => {
 		conversationState.snapshot = undefined;
 		conversationState.unavailable = { message: "Controller is unavailable" };

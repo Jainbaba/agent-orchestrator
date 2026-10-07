@@ -150,6 +150,7 @@ describe("apiClient runtime base URL", () => {
 
 		expect(error).toEqual({ code: "exited", message: "AO daemon exited with code 1" });
 	});
+});
 
 describe("subscribeApiBaseUrl", () => {
 	afterEach(() => {

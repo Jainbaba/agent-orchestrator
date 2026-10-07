@@ -44,7 +44,14 @@ type providerSwitchSessionWriter interface {
 }
 
 type providerSwitchCommitter interface {
-	CommitProviderSwitch(context.Context, domain.SessionRecord, domain.ConversationBranch, string) error
+	CommitProviderSwitch(context.Context, domain.SessionRecord, domain.ConversationBranch, string, domain.ConversationActivity) error
+}
+
+type providerSwitchActivityDetail struct {
+	Event         string              `json:"event"`
+	SourceHarness domain.AgentHarness `json:"sourceHarness"`
+	TargetHarness domain.AgentHarness `json:"targetHarness"`
+	BranchID      string              `json:"branchId"`
 }
 
 // SwitchProvider performs an idle-only Chat-to-Chat handoff. It retains the
@@ -63,6 +70,11 @@ func (s *Service) SwitchProvider(
 		return ProviderSwitchResult{}, err
 	}
 	if key := strings.TrimSpace(request.IdempotencyKey); key != "" {
+		if committed, found, lookupErr := s.committedProviderSwitch(ctx, id, key, request.TargetHarness); lookupErr != nil {
+			return ProviderSwitchResult{}, lookupErr
+		} else if found {
+			return committed, nil
+		}
 		s.switchMu.Lock()
 		previous, found := s.switchResults[string(id)+"\x00"+key]
 		s.switchMu.Unlock()
@@ -94,6 +106,11 @@ func (s *Service) SwitchProvider(
 	}
 	defer gate.unlock()
 	if key := strings.TrimSpace(request.IdempotencyKey); key != "" {
+		if committed, found, lookupErr := s.committedProviderSwitch(ctx, id, key, request.TargetHarness); lookupErr != nil {
+			return ProviderSwitchResult{}, lookupErr
+		} else if found {
+			return committed, nil
+		}
 		s.switchMu.Lock()
 		previous, found := s.switchResults[string(id)+"\x00"+key]
 		s.switchMu.Unlock()
@@ -197,8 +214,19 @@ func (s *Service) SwitchProvider(
 		targetRecord.Metadata.Model = ""
 		targetRecord.Metadata.Effort = ""
 		targetRecord.UpdatedAt = s.now()
+		detail, _ := json.Marshal(providerSwitchActivityDetail{
+			Event: "provider_switch", SourceHarness: source.harness,
+			TargetHarness: request.TargetHarness, BranchID: started.ProviderBoundary.ID,
+		})
+		switchActivity := domain.ConversationActivity{
+			ID: started.ProviderBoundary.ID + ":provider-switch", Kind: domain.ActivityKindSystem,
+			Status:  domain.ActivityStatusCompleted,
+			Summary: "Switched provider from " + string(source.harness) + " to " + string(request.TargetHarness),
+			Detail:  detail, RequestID: strings.TrimSpace(request.IdempotencyKey),
+			ProviderItemID: started.ProviderBoundary.ID + ":provider-switch",
+		}
 		if committer, ok := s.store.(providerSwitchCommitter); ok {
-			if err := committer.CommitProviderSwitch(ctx, targetRecord, *started.ProviderBoundary, started.ControllerGeneration); err != nil {
+			if err := committer.CommitProviderSwitch(ctx, targetRecord, *started.ProviderBoundary, started.ControllerGeneration, switchActivity); err != nil {
 				return ControllerCommit{}, err
 			}
 		} else {
@@ -252,16 +280,62 @@ func (s *Service) SwitchProvider(
 	// The canonical AO timeline records the ownership change after the target is
 	// durable. The bootstrap remains hidden; this marker is the user-visible fact
 	// that explains why the provider label changed without adding a fake message.
-	detail, _ := json.Marshal(map[string]string{
-		"event": "provider_switch", "sourceHarness": string(result.SourceHarness), "targetHarness": string(result.TargetHarness),
+	detail, _ := json.Marshal(providerSwitchActivityDetail{
+		Event: "provider_switch", SourceHarness: result.SourceHarness,
+		TargetHarness: result.TargetHarness, BranchID: result.BranchID,
 	})
 	if err := s.store.UpsertActivity(ctx, conversation.ID, "ao-provider-switch-"+result.BranchID, domain.ConversationActivity{
 		ID: result.BranchID + ":provider-switch", Kind: domain.ActivityKindSystem, Status: domain.ActivityStatusCompleted,
 		Summary: "Switched provider from " + string(result.SourceHarness) + " to " + string(result.TargetHarness), Detail: detail,
+		RequestID: strings.TrimSpace(request.IdempotencyKey), ProviderItemID: result.BranchID + ":provider-switch",
 	}, s.now()); err != nil {
 		s.log.Warn("record provider switch activity", "session", id, "error", err)
 	}
 	return result, nil
+}
+
+// committedProviderSwitch makes idempotency durable across daemon restarts.
+// The SQLite implementation writes the marker in the same transaction as the
+// branch/session publication; this read is only a recovery lookup, never the
+// ownership authority.
+func (s *Service) committedProviderSwitch(ctx context.Context, id domain.SessionID, key string, target domain.AgentHarness) (ProviderSwitchResult, bool, error) {
+	if s.reader == nil || strings.TrimSpace(key) == "" {
+		return ProviderSwitchResult{}, false, nil
+	}
+	conversation, err := s.store.ConversationForSession(ctx, id)
+	if err != nil {
+		return ProviderSwitchResult{}, false, err
+	}
+	rows, err := s.reader.LoadConversationSnapshot(ctx, conversation.ID)
+	if err != nil {
+		return ProviderSwitchResult{}, false, err
+	}
+	for _, activity := range rows.Activities {
+		if activity.RequestID != key || activity.Status != domain.ActivityStatusCompleted {
+			continue
+		}
+		var detail providerSwitchActivityDetail
+		if json.Unmarshal(activity.Detail, &detail) != nil || detail.Event != "provider_switch" {
+			continue
+		}
+		if detail.TargetHarness != target {
+			return ProviderSwitchResult{}, false, &ProviderSwitchError{Kind: domain.ProviderSwitchRefusalRecoveryRequired, Detail: "idempotency key belongs to a different provider switch"}
+		}
+		branchID := detail.BranchID
+		if branchID == "" {
+			branchID = strings.TrimSuffix(activity.ProviderItemID, ":provider-switch")
+		}
+		branch, branchErr := s.store.ConversationBranch(ctx, conversation.ID, branchID)
+		if branchErr != nil {
+			return ProviderSwitchResult{}, false, branchErr
+		}
+		return ProviderSwitchResult{
+			SessionID: id, ConversationID: conversation.ID, BranchID: branchID,
+			SourceHarness: detail.SourceHarness, TargetHarness: detail.TargetHarness,
+			ProviderConversation: branch.ProviderConversationID,
+		}, true, nil
+	}
+	return ProviderSwitchResult{}, false, nil
 }
 
 // ProviderSwitchCapabilities evaluates one target without starting it.

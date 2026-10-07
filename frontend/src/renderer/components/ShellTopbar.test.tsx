@@ -374,6 +374,7 @@ describe("ShellTopbar status pill", () => {
 		expect(screen.queryByText("session/sess-1")).not.toBeInTheDocument();
 		expect(screen.getByText("Working")).toBeInTheDocument();
 	});
+});
 
 describe("ShellTopbar orchestrator actions", () => {
 	it.each([CLOUD_PROJECT_KIND, STANDALONE_PROJECT_KIND, "unknown"] as const)(

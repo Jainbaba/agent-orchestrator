@@ -417,6 +417,7 @@ func (s *Store) CommitProviderSwitch(
 	rec domain.SessionRecord,
 	branch domain.ConversationBranch,
 	generation string,
+	activity domain.ConversationActivity,
 ) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -439,6 +440,22 @@ func (s *Store) CommitProviderSwitch(
 		}
 		if err := q.UpdateSession(ctx, recordToUpdate(rec)); err != nil {
 			return fmt.Errorf("update switched session: %w", err)
+		}
+		sequence, seqErr := q.NextConversationSequence(ctx, gen.NextConversationSequenceParams{
+			UpdatedAt: rec.UpdatedAt,
+			ID:        branch.ConversationID,
+		})
+		if seqErr != nil {
+			return fmt.Errorf("allocate provider switch activity sequence: %w", seqErr)
+		}
+		if err := q.InsertConversationActivity(ctx, gen.InsertConversationActivityParams{
+			ID: activity.ID, ConversationID: branch.ConversationID, Sequence: sequence,
+			Kind: activity.Kind, Status: activity.Status, Summary: activity.Summary,
+			DetailJson: string(activity.Detail), RequestID: activity.RequestID,
+			ProviderItemID: activity.ProviderItemID, CreatedAt: rec.UpdatedAt,
+			UpdatedAt: rec.UpdatedAt,
+		}); err != nil {
+			return fmt.Errorf("record provider switch activity: %w", err)
 		}
 		return nil
 	})

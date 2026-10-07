@@ -116,13 +116,18 @@ const CHAT_PROVIDER_TARGETS = [
 
 function ProviderSwitchMenu({ sessionId, currentProvider, hostId, blocked }: { sessionId: string; currentProvider: string; hostId?: string; blocked: boolean }) {
 	const commands = useConversationCommands(sessionId, hostId);
+	const showGlobalToast = useUiStore((state) => state.showGlobalToast);
 	return (
 		<>
 			{CHAT_PROVIDER_TARGETS.filter(([provider]) => provider !== currentProvider).map(([provider, label]) => (
 				<DropdownMenuItem
 						disabled={blocked || commands.switchProviderPending}
 						key={provider}
-						onSelect={() => void commands.switchProvider(provider)}
+						onSelect={() => {
+							void commands.switchProvider(provider)
+								.then(() => showGlobalToast("Provider switched", `Now using ${label}`))
+								.catch((error) => showGlobalToast("Provider switch failed", apiErrorMessage(error), "error"));
+						}}
 				>
 					Switch to {label}
 				</DropdownMenuItem>
@@ -1269,10 +1274,15 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 		<SessionActionsMenu inlineStatus={interfaceUi.inlineStatus}>
 			{interfaceUi.menuItem}
 			{session?.mode === "chat" && !interfaceUi.inlineStatus ? (
-				<ProviderSwitchMenu sessionId={session.id} currentProvider={session.provider} hostId={hostId} blocked={chatDraftBoundaries.length > 0} />
+						<ProviderSwitchMenu
+							sessionId={session.id}
+							currentProvider={session.provider}
+							hostId={hostId}
+							blocked={chatDraftBoundaries.length > 0 || session.isTerminated === true || session.activity?.state === "active"}
+						/>
 			) : null}
 		</SessionActionsMenu>
-	), [hostId, interfaceUi.inlineStatus, interfaceUi.menuItem, interfaceUi.unsupported, session]);
+	), [chatDraftBoundaries.length, hostId, interfaceUi.inlineStatus, interfaceUi.menuItem, interfaceUi.unsupported, session]);
 	const sessionHeaderActions = (
 		<div
 			className="session-topbar-session-chrome flex shrink-0 items-center"

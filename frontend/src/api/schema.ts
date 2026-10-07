@@ -3838,24 +3838,6 @@ export interface components {
             /** Format: int64 */
             totalTokens: number;
         };
-        ProviderSwitchCapabilityResponse: {
-            harness: string;
-            reason?: string;
-            retryable: boolean;
-            supported: boolean;
-        };
-        ProviderSwitchRequest: {
-            idempotencyKey?: string;
-            targetHarness: string;
-        };
-        ProviderSwitchResponse: {
-            branchId: string;
-            conversationId: string;
-            providerConversationId: string;
-            sessionId: string;
-            sourceHarness: string;
-            targetHarness: string;
-        };
         CreateAutomationRequest: {
             cron?: string;
             displayName: string;
@@ -4532,6 +4514,24 @@ export interface components {
             activityId: string;
             providerTurnId: string;
             sourceTurnId: string;
+        };
+        ProviderSwitchCapabilityResponse: {
+            harness: string;
+            reason?: string;
+            retryable: boolean;
+            supported: boolean;
+        };
+        ProviderSwitchRequest: {
+            idempotencyKey?: string;
+            targetHarness: string;
+        };
+        ProviderSwitchResponse: {
+            branchId: string;
+            conversationId: string;
+            providerConversationId: string;
+            sessionId: string;
+            sourceHarness: string;
+            targetHarness: string;
         };
         PushDeviceEnvelope: {
             device: components["schemas"]["PushDeviceResponse"];
@@ -11340,51 +11340,6 @@ export interface operations {
             };
         };
     };
-    switchSessionProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Session identifier, e.g. project-1. */
-                sessionId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderSwitchRequest"];
-            };
-        };
-        responses: {
-            200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ProviderSwitchResponse"] } };
-            400: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-            409: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-            413: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-            500: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-            501: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-            503: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-        };
-    };
-    getSessionProviderSwitchCapability: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Session identifier, e.g. project-1. */
-                sessionId: string;
-                /** @description Registered Chat provider harness to evaluate. */
-                targetHarness: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["ProviderSwitchCapabilityResponse"] } };
-            404: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-            500: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-            501: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["APIError"] } };
-        };
-    };
     getSessionConversation: {
         parameters: {
             query?: {
@@ -14432,6 +14387,139 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    switchSessionProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSwitchResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getSessionProviderSwitchCapability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+                /** @description Registered Chat provider harness to evaluate. */
+                targetHarness: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSwitchCapabilityResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

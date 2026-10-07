@@ -1,6 +1,6 @@
 # Provider switching implementation plan
 
-Status: in progress
+Status: implemented and verified
 
 Current checkpoint (2026-10-07): the bounded context builder and the idle-only
 Chat-to-Chat transaction are implemented. The builder reads the existing
@@ -13,9 +13,44 @@ ownership atomically, restores the source on target failure, and records a
 canonical provider-switch activity. The daemon routes, thin CLI command, and
 desktop session action now call that same path. A daemon restart before
 publication is safe because the source session/branch remains the durable owner
-and normal startup restores it; the target is simply retried. Remaining work is
-provider matrix/fixture coverage and full CI validation; no new transcript store
-or migration was added.
+and normal startup restores it; the target is simply retried. No new transcript
+store or migration was added; the registry-backed provider matrix uses the
+shared path and deterministic tests.
+
+## Execution checklist
+
+- [x] Inspect the existing implementation and keep the handoff on the canonical
+  AO conversation/activity model.
+- [x] Prove the switch saga with source-start failure, target-publication
+  failure, source restoration, and duplicate idempotency tests against SQLite.
+- [x] Keep the registry-backed provider set explicit; all 13 registered AO Chat
+  drivers are represented by the shared switch path and UI target list.
+- [x] Run backend compile, focused tests, race/vet, and API-spec generation.
+- [x] Run frontend typecheck and launch the Electron app against fresh scratch
+  data and the requested existing `~/.ao/dev/data` state.
+- [x] Record exact verification results and environment limitations below.
+
+### Verification record
+
+- Passed: `GOCACHE=/tmp/ao-provider-gocache go build ./...`.
+- Passed: `GOCACHE=/tmp/ao-provider-gocache go vet ./...`.
+- Passed: full compile-only backend suite (`go test -run '^$' ./...`).
+- Passed: Chat/storage/domain focused tests, including provider-switch fault
+  injection; provider-switch tests also pass with `go test -race`.
+- Passed: `GOCACHE=/tmp/ao-provider-gocache npm run api:spec` and OpenAPI spec
+  parity package tests.
+- Passed: frontend TypeScript typecheck (`npm run typecheck`).
+- Passed: Electron Forge dev launch with the bundled browser runtime. A fresh
+  scratch-data launch rendered the AO board with successful daemon API calls;
+  the requested existing `~/.ao/dev/data` launch rendered the existing
+  project/session list.
+- Blocked by sandbox: full `go test ./...` exercises tests that bind sockets,
+  tmux, or launch provider binaries; those fail with `operation not permitted`
+  or unavailable binaries, unrelated to this feature.
+- Existing dev data reports unrelated historical schema drift when opening old
+  conversation/session detail rows (`client_payload_hash`, `source_key`, and
+  `preview_capability_verifier` are absent despite their migrations being
+  marked applied). This is outside provider switching and was not modified.
 
 This plan implements idle-only provider switching for one AO session. It is
 intentionally shaped like Synara's handoff model: the AO conversation remains
