@@ -31,6 +31,7 @@ import { SessionFileWorkspace } from "./SessionFileWorkspace";
 import { SessionFilesPopOut } from "./SessionFilesPopOut";
 import { SessionBrowserPopOut } from "./SessionBrowserPopOut";
 import { SessionActionsMenu } from "./SessionActionsMenu";
+import { DropdownMenuItem } from "./ui/dropdown-menu";
 import { SessionInspector } from "./SessionInspector";
 import { ShellTopbar } from "./ShellTopbar";
 import { SessionTopbarHost } from "./SessionTopbarPortal";
@@ -49,7 +50,7 @@ import {
 import { useSessionInterfaceSwitch } from "../hooks/useSessionInterfaceSwitch";
 import { canResumeAgent } from "../hooks/useCanResumeAgent";
 import { useSessionInterfaceTransitionStatus } from "../hooks/useSessionInterfaceTransition";
-import { conversationQueryKey } from "../hooks/useConversation";
+import { conversationQueryKey, useConversationCommands } from "../hooks/useConversation";
 import { discardCapturedPendingFileAttachments } from "../hooks/useFileAttachments";
 import {
 	toCloudWorkspaceSession,
@@ -96,6 +97,39 @@ import {
 
 type CenterFileOpenRequest = { commitSha?: string; editing: boolean; key: number; line?: number; mode: FileViewMode; scope?: FileOpenOptions["scope"] };
 const EMPTY_AUXILIARY_TAB_ORDER: string[] = [];
+
+const CHAT_PROVIDER_TARGETS = [
+	["claude-code", "Claude Code"],
+	["codex", "Codex"],
+	["cursor", "Cursor"],
+	["opencode", "OpenCode"],
+	["opencode-v2", "OpenCode 2"],
+	["droid", "Droid"],
+	["kimi", "Kimi"],
+	["kimchi", "Kimchi"],
+	["pi", "Pi"],
+	["omp", "Oh My Pi"],
+	["qwen", "Qwen"],
+	["deepseek-harness", "DeepSeek Harness"],
+	["unreal-agent", "Unreal Agent"],
+] as const;
+
+function ProviderSwitchMenu({ sessionId, currentProvider, hostId, blocked }: { sessionId: string; currentProvider: string; hostId?: string; blocked: boolean }) {
+	const commands = useConversationCommands(sessionId, hostId);
+	return (
+		<>
+			{CHAT_PROVIDER_TARGETS.filter(([provider]) => provider !== currentProvider).map(([provider, label]) => (
+				<DropdownMenuItem
+						disabled={blocked || commands.switchProviderPending}
+						key={provider}
+						onSelect={() => void commands.switchProvider(provider)}
+				>
+					Switch to {label}
+				</DropdownMenuItem>
+			))}
+		</>
+	);
+}
 // Centre-file open requests take keys from this process-wide counter, not a
 // per-mount one: the display mode remembered for a request (ui-store) outlives a
 // SessionView remount, so a new request must never reuse a recorded key.
@@ -1234,8 +1268,11 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 	const sessionTabActions = useMemo(() => interfaceUi.unsupported ? null : (
 		<SessionActionsMenu inlineStatus={interfaceUi.inlineStatus}>
 			{interfaceUi.menuItem}
+			{session?.mode === "chat" && !interfaceUi.inlineStatus ? (
+				<ProviderSwitchMenu sessionId={session.id} currentProvider={session.provider} hostId={hostId} blocked={chatDraftBoundaries.length > 0} />
+			) : null}
 		</SessionActionsMenu>
-	), [interfaceUi.inlineStatus, interfaceUi.menuItem, interfaceUi.unsupported]);
+	), [hostId, interfaceUi.inlineStatus, interfaceUi.menuItem, interfaceUi.unsupported, session]);
 	const sessionHeaderActions = (
 		<div
 			className="session-topbar-session-chrome flex shrink-0 items-center"

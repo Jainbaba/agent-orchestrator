@@ -2,14 +2,20 @@
 
 Status: in progress
 
-Current checkpoint (2026-10-07): the domain contract and deterministic handoff
-context slice are implemented. The builder reads the existing canonical
-conversation snapshot, selects the latest completed compaction activity,
-keeps up to five complete human-user/provider-final exchanges, excludes daemon
-and automation prompts, and enforces the 32,000-character cap. The next slice
-is the idle-only lifecycle transaction and target-provider bootstrap delivery;
-the API and UI remain intentionally unwired until that ownership path is
-complete.
+Current checkpoint (2026-10-07): the bounded context builder and the idle-only
+Chat-to-Chat transaction are implemented. The builder reads the existing
+canonical conversation snapshot, selects the latest completed compaction
+activity, keeps up to five complete human-user/provider-final exchanges,
+excludes daemon and automation prompts, and enforces the 32,000-character cap.
+The lifecycle path fences and stops the source, starts a fresh target provider
+with the bootstrap in its standing prompt, commits the target branch/session
+ownership atomically, restores the source on target failure, and records a
+canonical provider-switch activity. The daemon routes, thin CLI command, and
+desktop session action now call that same path. A daemon restart before
+publication is safe because the source session/branch remains the durable owner
+and normal startup restores it; the target is simply retried. Remaining work is
+provider matrix/fixture coverage and full CI validation; no new transcript store
+or migration was added.
 
 This plan implements idle-only provider switching for one AO session. It is
 intentionally shaped like Synara's handoff model: the AO conversation remains

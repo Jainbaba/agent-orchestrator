@@ -53,6 +53,9 @@ type ChatControllerStart struct {
 	// active branch, which is the ordinary initial-start and resume path.
 	ProviderScopeID string
 	ProviderHandoff *domain.ChatProviderHandoff
+	// ProviderSwitch proves an idle Chat-to-Chat handoff. It reuses the AO
+	// conversation but always starts a fresh target-provider thread.
+	ProviderSwitch *domain.ChatProviderSwitch
 	// ControllerGeneration is supplied by a durable replacement saga that must
 	// fence the target before starting it. Ordinary starts leave it empty.
 	ControllerGeneration string

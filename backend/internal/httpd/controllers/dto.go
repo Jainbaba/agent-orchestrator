@@ -2325,6 +2325,36 @@ type SendConversationMessageRequest struct {
 	Resources       []ConversationResourceContentRequest `json:"resources,omitempty"`
 }
 
+// ProviderSwitchRequest starts an idle Chat-to-Chat provider handoff.
+type ProviderSwitchRequest struct {
+	TargetHarness  string `json:"targetHarness"`
+	IdempotencyKey string `json:"idempotencyKey,omitempty"`
+}
+
+// ProviderSwitchResponse returns only the published provider identities; the
+// bounded bootstrap remains internal to the daemon.
+type ProviderSwitchResponse struct {
+	SessionID            string `json:"sessionId"`
+	ConversationID       string `json:"conversationId"`
+	BranchID             string `json:"branchId"`
+	SourceHarness        string `json:"sourceHarness"`
+	TargetHarness        string `json:"targetHarness"`
+	ProviderConversation string `json:"providerConversationId"`
+}
+
+// ProviderSwitchCapabilityResponse describes one target without launching it.
+type ProviderSwitchCapabilityResponse struct {
+	Harness   string `json:"harness"`
+	Supported bool   `json:"supported"`
+	Reason    string `json:"reason,omitempty"`
+	Retryable bool   `json:"retryable"`
+}
+
+// ProviderSwitchTargetParam names a target provider in the capability route.
+type ProviderSwitchTargetParam struct {
+	TargetHarness string `path:"targetHarness" description:"Registered Chat provider harness to evaluate."`
+}
+
 // ConversationImageContentRequest is a native raster image prompt block.
 type ConversationImageContentRequest struct {
 	MIMEType string `json:"mimeType"`

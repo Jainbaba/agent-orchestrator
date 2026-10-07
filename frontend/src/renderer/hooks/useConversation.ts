@@ -947,6 +947,21 @@ export function useConversationCommands(sessionId: string | undefined, hostId?: 
 		},
 		onSettled: invalidate,
 	});
+
+	const switchProvider = useMutation({
+		mutationFn: async (targetHarness: string) => {
+			const { data, error } = await clientForSessionHost(hostId).POST(
+				"/api/v1/sessions/{sessionId}/provider-switch",
+				{
+					params: { path: { sessionId: sessionId as string } },
+					body: { targetHarness, idempotencyKey: crypto.randomUUID() },
+				},
+			);
+			if (error) throw error;
+			return data;
+		},
+		onSuccess: invalidate,
+	});
 	const acknowledgeAcceptedTurn = useCallback(
 		(turnId: string) => {
 			if (!sessionId) return;
@@ -1085,6 +1100,9 @@ export function useConversationCommands(sessionId: string | undefined, hostId?: 
 		activateBranch: (branchId: string) => activateBranch.mutateAsync(branchId),
 		activateBranchPending: activateBranch.isPending,
 		activateBranchError: activateBranch.error ? apiErrorMessage(activateBranch.error) : undefined,
+		switchProvider: (targetHarness: string) => switchProvider.mutateAsync(targetHarness),
+		switchProviderPending: switchProvider.isPending,
+		switchProviderError: switchProvider.error ? apiErrorMessage(switchProvider.error) : undefined,
 		steer: async (text: string, attachments?: WireImageContent[], clientMessageId?: string, recoverOnly?: boolean): Promise<ChatSteerOutcome> => {
 			try {
 				if (sessionId) recordDirectWorkerInteraction(sessionId, "chat", "worker", hostId);

@@ -61,6 +61,21 @@ type ProviderSwitchRequest struct {
 	IdempotencyKey string
 }
 
+// ChatProviderSwitch is an internal launch reservation. The source controller
+// is fenced before the target starts; Start uses this proof to reuse the same
+// AO conversation while creating a fresh provider branch.
+type ChatProviderSwitch struct {
+	RequestID        string
+	SourceSessionID  SessionID
+	SourceHarness    AgentHarness
+	TargetHarness    AgentHarness
+	ConversationID   string
+	SourceBranchID   string
+	SourceSequence   int64
+	SourceGeneration string
+	Bootstrap        string
+}
+
 // ProviderSwitchCapability describes whether one target can be offered for the
 // current session. Wire details stay behind ports.ChatDriver.
 type ProviderSwitchCapability struct {

@@ -409,6 +409,41 @@ func (s *Store) CreateAndActivateConversationBranch(
 	})
 }
 
+// CommitProviderSwitch atomically publishes the fresh provider branch and the
+// target harness/controller metadata. Provider startup happens before this
+// method; until it commits, the old branch remains the durable owner.
+func (s *Store) CommitProviderSwitch(
+	ctx context.Context,
+	rec domain.SessionRecord,
+	branch domain.ConversationBranch,
+	generation string,
+) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	return s.inTx(ctx, "commit provider switch", func(q *gen.Queries) error {
+		if err := insertAndActivateConversationBranchTx(ctx, q, branch, rec.UpdatedAt); err != nil {
+			return err
+		}
+		sessionRows, err := q.ActivateConversationBranchSession(ctx, gen.ActivateConversationBranchSessionParams{
+			ProviderConversationID: branch.ProviderConversationID,
+			ControllerGeneration:   generation,
+			UpdatedAt:              rec.UpdatedAt,
+			ID:                     rec.ID,
+		})
+		if err != nil {
+			return fmt.Errorf("move session controller: %w", err)
+		}
+		if sessionRows != 1 {
+			return fmt.Errorf("move session controller: live chat session %s not found", rec.ID)
+		}
+		if err := q.UpdateSession(ctx, recordToUpdate(rec)); err != nil {
+			return fmt.Errorf("update switched session: %w", err)
+		}
+		return nil
+	})
+}
+
 // CreateAndActivateReviewConversationBranch publishes a fresh provider branch
 // with the review's controller generation. Reviewer Chat does not own the
 // worker session controller, so its boundary must claim the review row.
