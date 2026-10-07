@@ -21,6 +21,7 @@ import type { ShellTerminal } from "../hooks/useShellTerminals";
 import { clampTerminalFontSize, initialTerminalFontSize, terminalFontSizeStorageKey } from "../lib/terminal-font-size";
 import { createTerminalMux, muxUrlFromApiBase } from "../lib/terminal-mux";
 import { getAgentActivityView } from "../lib/session-presentation";
+import { agentLabel } from "../lib/agent-options";
 import { isLinuxPlatform, isMacPlatform } from "../lib/platform";
 import { aoBridge } from "../lib/bridge";
 import { handleTerminalTabListKeyDown } from "../lib/terminal-tabs";
