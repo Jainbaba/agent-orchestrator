@@ -1558,6 +1558,31 @@ func (s *Service) Snapshot(ctx context.Context, id domain.SessionID) (Snapshot, 
 	}, nil
 }
 
+// ProviderHandoffContext reads the durable material that would be sent to a
+// target provider. It is intentionally read-only and must run before a caller
+// fences or stops the source controller.
+func (s *Service) ProviderHandoffContext(
+	ctx context.Context,
+	id domain.SessionID,
+) (ProviderHandoffContext, error) {
+	record, err := s.requireChatSession(ctx, id)
+	if err != nil {
+		return ProviderHandoffContext{}, err
+	}
+	conversation, err := s.store.ConversationForSession(ctx, id)
+	if err != nil {
+		return ProviderHandoffContext{}, err
+	}
+	if s.reader == nil {
+		return ProviderHandoffContext{}, errors.New("conversation reader is unavailable")
+	}
+	rows, err := s.reader.LoadConversationSnapshot(ctx, conversation.ID)
+	if err != nil {
+		return ProviderHandoffContext{}, fmt.Errorf("load handoff conversation %s: %w", conversation.ID, err)
+	}
+	return BuildProviderHandoffContext(record, rows), nil
+}
+
 // SnapshotForReview reads a reviewer-owned chat narrative without treating the
 // reviewer row as an AO session.
 func (s *Service) SnapshotForReview(ctx context.Context, reviewID string) (Snapshot, error) {
