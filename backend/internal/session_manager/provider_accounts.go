@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
@@ -79,35 +78,48 @@ func legacyCandidate(rec domain.SessionRecord) bool {
 }
 
 // MigrateLegacySessions restarts, four at a time, the idle sessions that still run
-// without an account, and reports how many keep running without one. A chat
-// that is asleep or stopped is adopted when it next starts and is not counted.
+// without an account, and reports how many keep running without one. They are
+// listed once: no session is created without an account after that, and only the
+// account loop calls this. A chat that is asleep or stopped is adopted when it
+// next starts and is not listed.
 func (m *Manager) MigrateLegacySessions(ctx context.Context) (int, error) {
 	if m.accounts == nil {
 		return 0, nil
 	}
-	sessions, err := m.store.ListAllSessions(ctx)
-	if err != nil {
-		return 0, err
-	}
-	var remaining atomic.Int64
-	failures := make([]error, len(sessions))
-	var wg sync.WaitGroup
-	for i, rec := range sessions {
-		if !legacyCandidate(rec) {
-			continue
+	if m.legacyLeft == nil {
+		sessions, err := m.store.ListAllSessions(ctx)
+		if err != nil {
+			return 0, err
 		}
-		wg.Go(func() {
-			left, err := m.moveLegacySession(ctx, rec.ID)
-			if err != nil {
-				failures[i] = fmt.Errorf("move session %s onto its account: %w", rec.ID, err)
+		m.legacyLeft = []domain.SessionID{}
+		for _, rec := range sessions {
+			if !legacyCandidate(rec) {
+				continue
 			}
-			if left {
-				remaining.Add(1)
+			// One whose account cannot be read is listed too, to be looked at again.
+			if _, managed, err := m.sessionAccount(ctx, rec.ID); err != nil || !managed {
+				m.legacyLeft = append(m.legacyLeft, rec.ID)
+			}
+		}
+	}
+	left, failures := make([]bool, len(m.legacyLeft)), make([]error, len(m.legacyLeft))
+	var wg sync.WaitGroup
+	for i, id := range m.legacyLeft {
+		wg.Go(func() {
+			if left[i], failures[i] = m.moveLegacySession(ctx, id); failures[i] != nil {
+				failures[i] = fmt.Errorf("move session %s onto its account: %w", id, failures[i])
 			}
 		})
 	}
 	wg.Wait()
-	return int(remaining.Load()), errors.Join(failures...)
+	kept := m.legacyLeft[:0]
+	for i, id := range m.legacyLeft {
+		if left[i] {
+			kept = append(kept, id)
+		}
+	}
+	m.legacyLeft = kept
+	return len(kept), errors.Join(failures...)
 }
 
 // SessionTurnEnded moves such a session as its turn ends, ahead of the next check.

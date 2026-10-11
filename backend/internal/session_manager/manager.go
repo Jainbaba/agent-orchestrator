@@ -546,6 +546,7 @@ type Manager struct {
 	// Moves onto Account Manager: free slots, sessions in flight, sessions stopped and not yet started.
 	legacySlots                *semaphore.Weighted
 	legacyMoving, legacyExited sync.Map
+	legacyLeft                 []domain.SessionID // nil until they are listed
 
 	reviewersMu sync.Mutex
 	reviewers   ReviewerTerminator

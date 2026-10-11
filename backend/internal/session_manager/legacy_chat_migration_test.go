@@ -146,6 +146,10 @@ func TestMigrateLegacySessionsRestartsOnlyQuietChatsWithoutAnAccount(t *testing.
 	if err != nil || remaining != 1 || len(launcher.restarts) != 2 || !accounts.has["quiet-1"] || !accounts.has["quiet-2"] {
 		t.Fatalf("remaining=%d err=%v restarts=%v", remaining, err, launcher.restarts)
 	}
+	// The sessions were listed once: only the one still to be moved is looked at again.
+	if len(m.legacyLeft) != 1 || m.legacyLeft[0] != "busy" {
+		t.Fatalf("left to move: %v", m.legacyLeft)
+	}
 	// The busy chat finishes its turn; a later pass has nothing left to do.
 	launcher.busy["busy"] = false
 	for range 2 {
