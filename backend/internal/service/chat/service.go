@@ -74,6 +74,7 @@ type Service struct {
 	renderMeasure    RenderMeasure
 	// renderMeasures tracks background measures, so tests can wait for them.
 	renderMeasures     sync.WaitGroup
+	sides              *sideManager
 	wakeChat           func(context.Context, domain.SessionID) error
 	hibernationEnabled func() bool
 	viewMu             sync.Mutex
@@ -127,6 +128,7 @@ func (g controllerGate) unlock() { <-g }
 // Options configures a Service. The id factory and clock are injected so tests
 // are deterministic.
 type Options struct {
+	AppRunID   string
 	Store      Store
 	Reader     SnapshotReader
 	PageReader SnapshotPageReader
@@ -166,7 +168,7 @@ func New(opts Options) *Service {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &Service{
+	svc := &Service{
 		store:              opts.Store,
 		reader:             opts.Reader,
 		pageReader:         opts.PageReader,
@@ -191,6 +193,8 @@ func New(opts Options) *Service {
 		wakeRuns:           make(map[domain.SessionID]*wakeRun),
 		backgroundWakes:    make(map[domain.SessionID]bool),
 	}
+	svc.sides = newSideManager(svc, newMemorySideStore(), opts.AppRunID)
+	return svc
 }
 
 func (s *Service) controllerGate(owner domain.ConversationOwner) controllerGate {
@@ -1486,6 +1490,12 @@ func (s *Service) Stop(ctx context.Context, id domain.SessionID) error {
 		return err
 	}
 	defer gate.unlock()
+	// Each side is marked closed before its host stops, and a host that fails to
+	// stop stays queued for the periodic cleanup retry. Stopping the main chat
+	// (Exit agent, agent switch, spawn rollback) must not depend on it.
+	if err := s.closeSessionSides(ctx, id); err != nil {
+		s.log.Warn("side chat cleanup deferred while stopping session", "session", id, "error", err)
+	}
 	s.viewMu.Lock()
 	delete(s.viewClosedAt, id)
 	delete(s.viewLeases, id)
@@ -1546,6 +1556,9 @@ func (s *Service) Stop(ctx context.Context, id domain.SessionID) error {
 // StopForOwner closes a typed-owner controller without touching its parent
 // worker's Chat controller.
 func (s *Service) StopForOwner(ctx context.Context, owner domain.ConversationOwner) error {
+	if owner.Kind == domain.ConversationOwnerSession {
+		return s.Stop(ctx, domain.SessionID(owner.ID))
+	}
 	gate := s.controllerGate(owner)
 	if err := gate.lock(ctx); err != nil {
 		return err
@@ -1581,6 +1594,9 @@ func (s *Service) StopForOwner(ctx context.Context, owner domain.ConversationOwn
 
 // StopAll closes every controller, for daemon shutdown.
 func (s *Service) StopAll(ctx context.Context) {
+	if s.sides != nil {
+		s.sides.stopAll()
+	}
 	s.mu.Lock()
 	type shutdownTarget struct {
 		owner      domain.ConversationOwner
