@@ -4331,6 +4331,7 @@ export interface components {
             hostId: string;
             keepAwake: components["schemas"]["ControllersKeepAwakeStatus"];
             loopbackOnly: boolean;
+            noPublicTunnel: boolean;
             password: string;
             port: number;
             securePairing: components["schemas"]["ControllersSecurePairingStatus"];

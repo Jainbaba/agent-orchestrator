@@ -7,6 +7,7 @@ import type { FilesSource } from "../hooks/useSessionWorkspaceFiles";
 import {
 	applyDocumentTheme,
 	applyDocumentThemeStyle,
+	isDocumentThemeStyle,
 	readStoredThemePreference,
 	readStoredThemeStyle,
 	resolveTheme,
@@ -26,8 +27,9 @@ export type GlobalSettingsSection =
 	| "general"
 	| "harness"
 	| "accountManager"
+	| "billing"
 	| "remoteHosts"
-	| "coder11x"
+	| "coder"
 	| "mobile"
 	| "shortcuts"
 	| "browserProfiles"
@@ -348,6 +350,14 @@ export const useUiStore = create<UiState>((set, get) => ({
 	},
 	setThemeStyle: (themeStyle) => {
 		if (get().themeStyle === themeStyle) return;
+		// Choosing the theme being previewed keeps the preview as-is. A View
+		// Transition here would apply it a frame late, after the menu's close
+		// has restored the old theme, and flash between the two.
+		if (isDocumentThemeStyle(themeStyle)) {
+			getLocalStorage()?.setItem(themeStyleStorageKey, themeStyle);
+			set({ themeStyle });
+			return;
+		}
 		runThemeTransition(() => {
 			getLocalStorage()?.setItem(themeStyleStorageKey, themeStyle);
 			applyDocumentThemeStyle(themeStyle);

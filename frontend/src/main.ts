@@ -85,6 +85,7 @@ import { toggleAppDevTools } from "./main/app-devtools";
 import { attachAppShortcuts } from "./main/app-shortcuts";
 import {
 	KEYBOARD_SHORTCUTS_HELP_CHANNEL,
+	OPEN_SETTINGS_SHORTCUT_CHANNEL,
 	SET_CLOSE_SHELL_TERMINAL_SHORTCUT_ENABLED_CHANNEL,
 	SET_TERMINAL_FOCUSED_CHANNEL,
 	type KeybindingOverrides,
@@ -181,6 +182,7 @@ import { buildLinuxAppMenuTemplate, buildMacAppMenuTemplate, buildWindowsAppMenu
 import { ancestorRepositorySetupWarning, resolveCheckedOutBranch, scanImportFolder } from "./main/import-folder-scan";
 import { parseOpenFolderPathArg } from "./main/open-folder-arg";
 import { registerRemotesIpc, remotesFilePath } from "./main/remotes-main";
+import { createLocalHostIdentity } from "./main/remote-request";
 import { RemoteRegistry } from "./main/remote-registry";
 import { startRemoteProxy } from "./main/remote-proxy";
 import { AGENT_SWITCH_VISIBILITY_IPC_CHANNEL } from "./shared/agent-switch-observability";
@@ -315,6 +317,7 @@ let daemonRestartAfterExitProcess: ChildProcess | null = null;
 let daemonStartPromise: Promise<DaemonStatus> | null = null;
 let daemonStartEpoch = 0;
 let daemonStatus: DaemonStatus = { state: "stopped" };
+let daemonAttachmentGeneration = 0;
 let daemonOutput = "";
 let browserViewHost: BrowserViewHost | null = null;
 let browserProfileIpc: BrowserProfileIpc | null = null;
@@ -344,6 +347,7 @@ let keybindingOverrides: KeybindingOverrides = {};
 let keybindingRecordingActive = false;
 let closeShellTerminalShortcutEnabled = false;
 let terminalFocused = false;
+let terminalFontSizeFocused = false;
 let chatDraftRisks: ChatDraftBoundaryKind[] = [];
 let chatDraftDialog: ChatDraftDialogCopy | undefined;
 let chatDraftQuitConfirmed = false;
@@ -530,6 +534,7 @@ function focusMainWindow(): void {
 }
 
 function setDaemonStatus(nextStatus: DaemonStatus): void {
+	if (nextStatus.state !== "ready" || daemonStatus.state !== "ready" || nextStatus.port !== daemonStatus.port || nextStatus.pid !== daemonStatus.pid) daemonAttachmentGeneration++;
 	if (nextStatus.state !== "ready") disposeBrowserRuntimeLink();
 	daemonStatus = nextStatus;
 	getShellWebContents()?.send("daemon:status", daemonStatus);
@@ -825,6 +830,7 @@ async function createWindowInternal(): Promise<void> {
 			void toggleAppDevTools(browserViewHost, getShellWebContents);
 		},
 		() => terminalFocused,
+		() => terminalFontSizeFocused,
 	);
 
 	browserViewHost = createBrowserViewHost({
@@ -927,9 +933,11 @@ async function createWindowInternal(): Promise<void> {
 	shellWebContents.on("render-process-gone", () => {
 		keybindingRecordingActive = false;
 		terminalFocused = false;
+		terminalFontSizeFocused = false;
 	});
 	shellWebContents.on("did-start-loading", () => {
 		terminalFocused = false;
+		terminalFontSizeFocused = false;
 		trayLifecycle.clear();
 	});
 	shellWebContents.on("render-process-gone", () => trayLifecycle.clear());
@@ -1061,6 +1069,7 @@ const editorHandoff = createEditorHandoff({
 		const error = await shell.openPath(workspacePath);
 		if (error) throw new Error(error);
 	},
+	copyText: (text) => clipboard.writeText(text),
 	logError: (message, error) => console.error(message, error),
 });
 
@@ -1864,7 +1873,7 @@ async function startDaemonInner(startEpoch: number): Promise<DaemonStatus> {
 		if (portConfirmed || daemonProcess !== child || daemonStoppingProcess === child) return;
 		portConfirmed = true;
 		stopDiscovery();
-		setDaemonStatus({ state: "ready", port });
+		setDaemonStatus({ state: "ready", port, pid: child.pid });
 
 		// Establish the OS-native liveness link on the spawn path (we own this
 		// daemon). Holding the connection keeps the daemon alive; when Electron
@@ -2098,6 +2107,10 @@ ipcMain.handle("editorHandoff:open", (event, input) => {
 	if (event.sender !== getShellWebContents()) throw new Error("Untrusted editor handoff request.");
 	return editorHandoff.open(input && typeof input === "object" ? input : { sessionId: "" });
 });
+ipcMain.handle("editorHandoff:copyWorkspacePath", (event, sessionId: string) => {
+	if (event.sender !== getShellWebContents()) throw new Error("Untrusted editor handoff request.");
+	return editorHandoff.copyWorkspacePath(typeof sessionId === "string" ? sessionId : "");
+});
 ipcMain.handle("app:getVersion", () => app.getVersion());
 ipcMain.handle("app:openExternal", async (_event, url: string) => {
 	await openAllowedAppExternalURL(url, shell);
@@ -2165,9 +2178,10 @@ ipcMain.on(SET_CLOSE_SHELL_TERMINAL_SHORTCUT_ENABLED_CHANNEL, (_event, enabled: 
 	closeShellTerminalShortcutEnabled = enabled === true;
 });
 
-ipcMain.on(SET_TERMINAL_FOCUSED_CHANNEL, (event, focused: unknown) => {
+ipcMain.on(SET_TERMINAL_FOCUSED_CHANNEL, (event, focused: unknown, handlesFontSize: unknown) => {
 	if (event.sender !== getShellWebContents() || typeof focused !== "boolean") return;
 	terminalFocused = focused;
+	terminalFontSizeFocused = focused && handlesFontSize === true;
 });
 
 ipcMain.on(SET_CHAT_DRAFT_RISK_CHANNEL, (event, risks: unknown, dialogCopy: unknown) => {
@@ -2321,6 +2335,9 @@ registerRemotesIpc(ipcMain, {
 		if (!await getCloudSession(cloudDataDir())) throw new Error("Sign in to AO Cloud to use remote hosts.");
 	},
 	getAccountId: async () => (await getCloudSession(cloudDataDir()))?.user.id ?? "",
+	localIdentity: createLocalHostIdentity(() => daemonStatus.state === "ready" && daemonStatus.port
+		? { port: daemonStatus.port, pid: daemonStatus.pid, generation: daemonAttachmentGeneration }
+		: null),
 });
 
 ipcMain.handle("app:chooseDirectory", async (_event, input?: string | { title?: string; defaultPath?: string }) => {
@@ -2765,6 +2782,13 @@ function focusCloudWindow(): void {
 
 async function handleCloudDeepLinkAndFocus(url: string): Promise<void> {
 	focusCloudWindow();
+	// Stripe Checkout and the Customer Portal return here (via the control
+	// plane's /billing/return page): open Settings on Billing, which re-reads
+	// the plan when it mounts.
+	if (isBillingDeepLink(url)) {
+		getShellWebContents()?.send(OPEN_SETTINGS_SHORTCUT_CHANNEL, "billing");
+		return;
+	}
 	try {
 		const session = await handleCloudDeepLink(url, cloudDataDir());
 		if (!session) return;
@@ -2772,6 +2796,15 @@ async function handleCloudDeepLinkAndFocus(url: string): Promise<void> {
 	} catch (error) {
 		console.error("WorkOS callback failed:", error);
 		await showCloudSignInFailure(error);
+	}
+}
+
+function isBillingDeepLink(raw: string): boolean {
+	try {
+		const url = new URL(raw);
+		return url.protocol === "ao-app:" && url.hostname === "billing";
+	} catch {
+		return false;
 	}
 }
 
