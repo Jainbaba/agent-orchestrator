@@ -3838,6 +3838,8 @@ export interface components {
         ConversationTurnSettingsPayload: {
             /** @enum {string} */
             approvalMode?: "default" | "accept-edits" | "auto" | "bypass-permissions";
+            /** @enum {string} */
+            autoCompactWindow?: "200k" | "1m";
             fastMode?: boolean;
             model?: string;
             planMode?: boolean;

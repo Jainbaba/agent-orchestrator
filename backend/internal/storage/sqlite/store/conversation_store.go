@@ -1643,12 +1643,13 @@ func (s *Store) SetConversationSettings(
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	if err := s.qw.UpdateConversationTurnSettings(ctx, gen.UpdateConversationTurnSettingsParams{
-		Model:           nullableString(settings.Model),
-		ReasoningEffort: nullableString(settings.ReasoningEffort),
-		ApprovalMode:    nullableString(string(settings.ApprovalMode)),
-		OpencodeMode:    settings.OpenCodeMode,
-		UpdatedAt:       now,
-		ID:              conversationID,
+		Model:             nullableString(settings.Model),
+		ReasoningEffort:   nullableString(settings.ReasoningEffort),
+		ApprovalMode:      nullableString(string(settings.ApprovalMode)),
+		OpencodeMode:      settings.OpenCodeMode,
+		AutoCompactWindow: settings.AutoCompactWindow,
+		UpdatedAt:         now,
+		ID:                conversationID,
 	}); err != nil {
 		return fmt.Errorf("set conversation settings for %s: %w", conversationID, err)
 	}
@@ -3486,10 +3487,11 @@ func conversationToDomain(row gen.Conversation) domain.ConversationRecord {
 		ActiveBranchID: row.ActiveBranchID,
 		LatestSequence: row.LatestSequence,
 		Settings: domain.ConversationSettings{
-			Model:           row.Model.String,
-			ReasoningEffort: row.ReasoningEffort.String,
-			ApprovalMode:    domain.PermissionMode(row.ApprovalMode.String),
-			OpenCodeMode:    row.OpencodeMode,
+			Model:             row.Model.String,
+			ReasoningEffort:   row.ReasoningEffort.String,
+			ApprovalMode:      domain.PermissionMode(row.ApprovalMode.String),
+			OpenCodeMode:      row.OpencodeMode,
+			AutoCompactWindow: row.AutoCompactWindow,
 		},
 		ProviderTitle: row.ProviderTitle,
 		AppliedTitle:  row.AppliedTitle,

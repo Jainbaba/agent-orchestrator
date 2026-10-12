@@ -183,11 +183,12 @@ var shippedMigrations = map[int64]string{
 	177: "0177_review_run_rerun_same_head.sql",
 	178: "0178_archive_reviewers.sql",
 	179: "0179_remove_agent_switching.sql",
-	// 230 and 231 are temporary local numbers that keep this branch clear of a
-	// sibling branch sharing the dev database. Renumber both files and these
+	// 230 to 232 are temporary local numbers that keep this branch clear of a
+	// sibling branch sharing the dev database. Renumber the files and these
 	// entries to the next free versions before merging.
 	230: "0230_tui_provider_switch.sql",
 	231: "0231_session_terminal_turns.sql",
+	232: "0232_conversation_auto_compact_window.sql",
 }
 
 // burnedVersion reports version numbers that must never be (re)used: they

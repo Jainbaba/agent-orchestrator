@@ -578,6 +578,8 @@ export interface TurnSettings {
 	fastMode?: boolean;
 	/** Ask the provider to plan rather than act, where AO sets that per turn. */
 	planMode?: boolean;
+	/** Where Claude Code compacts on its own: "200k" or "1m". Unset leaves it to Claude Code. */
+	autoCompactWindow?: string;
 }
 
 /** One model the provider offers for this session. */

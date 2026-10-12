@@ -34,7 +34,7 @@ import { ComposerErrorNotice, PendingAgentSwitchNotice, type PendingAgentSwitch 
 import { apiErrorMessage } from "../../lib/api-client";
 import { AGENT_SWITCH_FAILED } from "./ChatComposer";
 import { ChatWorkspace } from "./ChatWorkspace";
-import { hasProviderPermissionMode, withUltrathink } from "./TurnSettingsBar";
+import { hasProviderPermissionMode, withUltracode } from "./TurnSettingsBar";
 
 export interface ConversationWorkState {
 	controllerBusy: boolean;
@@ -204,12 +204,30 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 		chosenSwitch?.sessionId === session.id && currentHarness && chosenSwitch.target.harness !== currentHarness
 			? chosenSwitch.target
 			: undefined;
-	// Ultrathink is asked for in each message, so it is kept here, not on the agent.
-	const [ultrathinkFor, setUltrathinkFor] = useState<string>();
-	const ultrathink = useMemo(() => ({
-		on: ultrathinkFor === session.id,
-		onChange: (on: boolean) => setUltrathinkFor(on ? session.id : undefined),
-	}), [session.id, ultrathinkFor]);
+	// Ultracode is asked for in each message, so it is kept here, not on the agent.
+	const [ultracodeFor, setUltracodeFor] = useState<string>();
+	const ultracode = useMemo(() => ({
+		on: ultracodeFor === session.id,
+		onChange: (on: boolean) => setUltracodeFor(on ? session.id : undefined),
+	}), [session.id, ultracodeFor]);
+	// The control is rebuilt only when its value changes; the save reads the
+	// latest settings, so a streaming reply does not redraw the settings bar.
+	const latestSettings = useRef({ settings: snapshot?.settings, save: commands.chooseStartSettings });
+	latestSettings.current = { settings: snapshot?.settings, save: commands.chooseStartSettings };
+	const autoCompactWindow = snapshot?.settings.autoCompactWindow;
+	const [applyingAutoCompact, setApplyingAutoCompact] = useState(false);
+	const autoCompact = useMemo(() => ({
+		value: autoCompactWindow,
+		// Claude Code reads this when it starts, so the agent is restarted to
+		// apply it. That is only safe while it is not working.
+		disabled: applyingAutoCompact || controllerBusy || hasRunningTurn || queuedTurnCount > 0,
+		onChange: (value: string | undefined) => {
+			const { settings, save } = latestSettings.current;
+			if (!settings) return;
+			setApplyingAutoCompact(true);
+			void save({ ...settings, autoCompactWindow: value }).catch(() => {}).finally(() => setApplyingAutoCompact(false));
+		},
+	}), [applyingAutoCompact, autoCompactWindow, controllerBusy, hasRunningTurn, queuedTurnCount]);
 	const switchBlocked = controllerBusy || hasRunningTurn || queuedTurnCount > 0 || providerSwitch.switchProviderPending;
 	const agentSwitch = useMemo(
 		() => currentHarness && !session.cloud && !newWorkDisabled ? {
@@ -436,12 +454,13 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 						setChosenSwitch(undefined);
 					}
 					const viaClaude = (pendingSwitch?.harness ?? currentHarness) === "claude-code";
-					return commands.send({ text: ultrathink.on && viaClaude && !pendingSwitch ? withUltrathink(text) : text, attachments, clientMessageId });
+					return commands.send({ text: ultracode.on && viaClaude && !pendingSwitch ? withUltracode(text) : text, attachments, clientMessageId });
 				}}
 				commandError={commands.error}
 				agentSwitch={agentSwitch}
 				composerAction={interfaceSwitch?.control}
-				ultrathink={ultrathink}
+				ultracode={ultracode}
+				autoCompact={autoCompact}
 				composerNotice={interfaceSwitch?.errorNotice ?? (providerSwitch.switchProviderError ? (
 					<ComposerErrorNotice title="Couldn't switch agent" message={providerSwitch.switchProviderError} onDismiss={providerSwitch.resetSwitchProviderError} />
 				) : pendingSwitch ? (

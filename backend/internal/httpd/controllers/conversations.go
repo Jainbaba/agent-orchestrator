@@ -640,11 +640,12 @@ func (c *ConversationsController) setSettings(w http.ResponseWriter, r *http.Req
 
 	settings, err := c.Svc.SetTurnSettings(r.Context(),
 		domain.SessionID(chi.URLParam(r, "sessionId")), domain.ConversationSettings{
-			Model:           req.Model,
-			ReasoningEffort: req.ReasoningEffort,
-			ApprovalMode:    approval,
-			FastMode:        req.FastMode,
-			PlanMode:        req.PlanMode,
+			Model:             req.Model,
+			ReasoningEffort:   req.ReasoningEffort,
+			ApprovalMode:      approval,
+			FastMode:          req.FastMode,
+			PlanMode:          req.PlanMode,
+			AutoCompactWindow: req.AutoCompactWindow,
 		})
 	if err != nil {
 		writeConversationError(w, r, err)
@@ -707,11 +708,12 @@ func configOptionsPayload(options []ports.ChatConfigOption) ConversationConfigOp
 
 func turnSettingsPayload(settings domain.ConversationSettings) ConversationTurnSettingsPayload {
 	return ConversationTurnSettingsPayload{
-		Model:           settings.Model,
-		ReasoningEffort: settings.ReasoningEffort,
-		ApprovalMode:    string(settings.ApprovalMode),
-		FastMode:        settings.FastMode,
-		PlanMode:        settings.PlanMode,
+		Model:             settings.Model,
+		ReasoningEffort:   settings.ReasoningEffort,
+		ApprovalMode:      string(settings.ApprovalMode),
+		FastMode:          settings.FastMode,
+		PlanMode:          settings.PlanMode,
+		AutoCompactWindow: settings.AutoCompactWindow,
 	}
 }
 

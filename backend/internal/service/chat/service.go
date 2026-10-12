@@ -234,6 +234,10 @@ func notifyControllerReady(
 	return commit, nil
 }
 
+// claudeAutoCompactWindowEnv is the Claude Code setting for the token count at
+// which it compacts a conversation on its own.
+const claudeAutoCompactWindowEnv = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
+
 func cloneStartConfig(cfg StartConfig) StartConfig {
 	cloned := cfg
 	if cfg.ProviderSwitch != nil {
@@ -615,6 +619,19 @@ func (s *Service) startLocked(ctx context.Context, cfg StartConfig) (*Controller
 			return nil, fmt.Errorf("active conversation branch provider handle %q does not match session handle %q",
 				activeBranch.ProviderConversationID, cfg.ProviderConversationID)
 		}
+	}
+	// Claude Code reads its compaction window when it starts. The map is
+	// copied because the caller's may be the one saved for later restarts.
+	if cfg.Harness == domain.HarnessClaudeCode {
+		env := make(map[string]string, len(cfg.Env)+1)
+		for key, value := range cfg.Env {
+			env[key] = value
+		}
+		delete(env, claudeAutoCompactWindowEnv)
+		if tokens := conversation.Settings.AutoCompactTokens(); tokens != "" {
+			env[claudeAutoCompactWindowEnv] = tokens
+		}
+		cfg.Env = env
 	}
 	// Conversation settings are durable user choices. Restore the selected
 	// model when rebuilding a controller after a daemon restart; the caller's

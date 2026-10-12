@@ -302,8 +302,8 @@ export function AgentModelPicker({
 				)}
 			</OptionMenuTrigger>
 			<OptionMenuContent align="start" alignOffset={shift} side={terminal ? "right" : "top"}
-				// The footer bar adds its own height; it must not squeeze the model list.
-				className={cn(MENU_CLASS, pendingFooter && pending?.harness === tab ? "max-h-[calc(var(--size-select-menu-max)+2.75rem)]!" : undefined)}
+				// A footer bar or extra row adds its own height; it must not squeeze the model list.
+				className={cn(MENU_CLASS, (pendingFooter && pending?.harness === tab) || (extras && tab === currentHarness) ? "max-h-[calc(var(--size-select-menu-max)+2.85rem)]!" : undefined)}
 			>
 				<AgentTabStrip>
 					{agents.map((agent) => (

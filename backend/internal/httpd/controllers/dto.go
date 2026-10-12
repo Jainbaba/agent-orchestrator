@@ -2594,6 +2594,9 @@ type ConversationTurnSettingsPayload struct {
 	FastMode bool `json:"fastMode,omitempty"`
 	// PlanMode asks the provider to plan rather than act, where it supports that.
 	PlanMode bool `json:"planMode,omitempty"`
+	// AutoCompactWindow is where Claude Code compacts on its own. Empty leaves
+	// it to Claude Code. It applies the next time the agent starts.
+	AutoCompactWindow string `json:"autoCompactWindow,omitempty" enum:"200k,1m"`
 }
 
 // ResolveConversationApprovalRequest answers a pending approval. DecisionID must

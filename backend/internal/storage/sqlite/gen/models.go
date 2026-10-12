@@ -140,6 +140,7 @@ type Conversation struct {
 	UsageCurrency              sql.NullString
 	ActiveBranchID             string
 	OpencodeMode               string
+	AutoCompactWindow          string
 }
 
 type ConversationActivity struct {

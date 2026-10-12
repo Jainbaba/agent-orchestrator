@@ -11351,6 +11351,11 @@ components:
           - auto
           - bypass-permissions
           type: string
+        autoCompactWindow:
+          enum:
+          - 200k
+          - 1m
+          type: string
         fastMode:
           type: boolean
         model:

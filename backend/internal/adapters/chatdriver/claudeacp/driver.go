@@ -292,18 +292,28 @@ func validateClaudeACPExecutable(binary, goos string) error {
 }
 
 func claudeSessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
-	standing := strings.TrimSpace(cfg.SystemPrompt)
-	if standing == "" {
+	meta := map[string]any{}
+	if standing := strings.TrimSpace(cfg.SystemPrompt); standing != "" {
+		// Append AO's standing instructions to Claude Code's own prompt. Replacing
+		// the preset would discard Claude's native coding/tool instructions.
+		meta["systemPrompt"] = map[string]any{
+			"type": "preset", "preset": "claude_code", "append": standing,
+		}
+	}
+	// Sent with the session too, so a choice made after the adapter process
+	// started still reaches the next Claude Code session it opens.
+	if window := cfg.Env[claudeAutoCompactWindowEnv]; window != "" {
+		meta["claudeCode"] = map[string]any{
+			"options": map[string]any{"env": map[string]string{claudeAutoCompactWindowEnv: window}},
+		}
+	}
+	if len(meta) == 0 {
 		return nil
 	}
-	// Append AO's standing instructions to Claude Code's own prompt. Replacing
-	// the preset would discard Claude's native coding/tool instructions.
-	return map[string]any{
-		"systemPrompt": map[string]any{
-			"type": "preset", "preset": "claude_code", "append": standing,
-		},
-	}
+	return meta
 }
+
+const claudeAutoCompactWindowEnv = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
 
 func claudeSessionMode(permission ports.PermissionMode) string {
 	switch ports.NormalizePermissionMode(permission) {

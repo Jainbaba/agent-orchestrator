@@ -1066,6 +1066,19 @@ export function useConversationCommands(sessionId: string | undefined, hostId?: 
 		compact: () => compact.mutateAsync(),
 		choosingSettings: chooseSettings.isPending && chooseSettings.variables?.targetSessionId === sessionId,
 		chooseSettings: (settings: TurnSettings) => chooseSettings.mutate({ targetSessionId: sessionId as string, settings }),
+		/**
+		 * Saves settings the agent only reads when it starts, then restarts the
+		 * agent so they take effect. The conversation is resumed, not replaced.
+		 */
+		chooseStartSettings: async (settings: TurnSettings) => {
+			await chooseSettings.mutateAsync({ targetSessionId: sessionId as string, settings });
+			const { error } = await clientForSessionHost(hostId).POST(
+				"/api/v1/sessions/{sessionId}/exit-agent",
+				{ params: { path: { sessionId: sessionId as string } } },
+			);
+			if (error) throw new Error(apiErrorMessage(error));
+			await resume.mutateAsync();
+		},
 		/** A compaction is in flight provider-side and takes seconds, so it reads as
 		 *  its own state rather than folding into the generic busy flag, which also
 		 *  gates the composer. */
@@ -1551,6 +1564,7 @@ export function toSnapshot(wire: WireSnapshot): ConversationSnapshot {
 			approvalMode: (wire.settings?.approvalMode as ApprovalMode | undefined) || undefined,
 			fastMode: wire.settings?.fastMode || undefined,
 			planMode: wire.settings?.planMode || undefined,
+			autoCompactWindow: wire.settings?.autoCompactWindow || undefined,
 		},
 		// Absent means the provider has not reported, which the meter renders as
 		// nothing rather than as an empty bar.
