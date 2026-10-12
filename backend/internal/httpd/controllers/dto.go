@@ -309,6 +309,11 @@ type WorkspaceSearchQuery struct {
 	Limit  int    `query:"limit,omitempty" minimum:"1" maximum:"100" description:"Maximum results. Defaults to 50."`
 }
 
+// WorkspaceResolveQuery is the query string accepted by GET /api/v1/sessions/{sessionId}/workspace/resolve.
+type WorkspaceResolveQuery struct {
+	Path string `query:"path" required:"true" description:"Absolute or workspace-relative file path to classify."`
+}
+
 // WorkspaceTreeQuery is the query string accepted by GET /api/v1/sessions/{sessionId}/workspace/tree.
 type WorkspaceTreeQuery struct {
 	Path string `query:"path,omitempty" description:"Directory path relative to the session workspace root. Empty or omitted lists the root."`
@@ -743,6 +748,15 @@ type WorkspaceFileSearchResponse struct {
 	Results    []WorkspaceFileSearchResultResponse `json:"results"`
 	NextCursor string                              `json:"nextCursor,omitempty"`
 	Truncated  bool                                `json:"truncated"`
+}
+
+// WorkspacePathResolutionResponse is the body of GET /api/v1/sessions/{sessionId}/workspace/resolve.
+// Path is relative to the root named by Kind and empty when Kind is outside;
+// the response never carries a local absolute path.
+type WorkspacePathResolutionResponse struct {
+	SessionID domain.SessionID             `json:"sessionId"`
+	Kind      sessionsvc.WorkspacePathKind `json:"kind" enum:"workspace,artifact,outside"`
+	Path      string                       `json:"path"`
 }
 
 // DesktopWorkspaceLocationResponse is returned only by the LAN-blocked desktop
