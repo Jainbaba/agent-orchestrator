@@ -34,7 +34,7 @@ import { ComposerErrorNotice, PendingAgentSwitchNotice, type PendingAgentSwitch 
 import { apiErrorMessage } from "../../lib/api-client";
 import { AGENT_SWITCH_FAILED } from "./ChatComposer";
 import { ChatWorkspace } from "./ChatWorkspace";
-import { hasProviderPermissionMode } from "./TurnSettingsBar";
+import { hasProviderPermissionMode, withUltrathink } from "./TurnSettingsBar";
 
 export interface ConversationWorkState {
 	controllerBusy: boolean;
@@ -204,6 +204,12 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 		chosenSwitch?.sessionId === session.id && currentHarness && chosenSwitch.target.harness !== currentHarness
 			? chosenSwitch.target
 			: undefined;
+	// Ultrathink is asked for in each message, so it is kept here, not on the agent.
+	const [ultrathinkFor, setUltrathinkFor] = useState<string>();
+	const ultrathink = useMemo(() => ({
+		on: ultrathinkFor === session.id,
+		onChange: (on: boolean) => setUltrathinkFor(on ? session.id : undefined),
+	}), [session.id, ultrathinkFor]);
 	const switchBlocked = controllerBusy || hasRunningTurn || queuedTurnCount > 0 || providerSwitch.switchProviderPending;
 	const agentSwitch = useMemo(
 		() => currentHarness && !session.cloud && !newWorkDisabled ? {
@@ -429,11 +435,13 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 							.catch((error) => { throw Object.assign(new Error(apiErrorMessage(error)), { code: AGENT_SWITCH_FAILED }); });
 						setChosenSwitch(undefined);
 					}
-					return commands.send({ text, attachments, clientMessageId });
+					const viaClaude = (pendingSwitch?.harness ?? currentHarness) === "claude-code";
+					return commands.send({ text: ultrathink.on && viaClaude && !pendingSwitch ? withUltrathink(text) : text, attachments, clientMessageId });
 				}}
 				commandError={commands.error}
 				agentSwitch={agentSwitch}
 				composerAction={interfaceSwitch?.control}
+				ultrathink={ultrathink}
 				composerNotice={interfaceSwitch?.errorNotice ?? (providerSwitch.switchProviderError ? (
 					<ComposerErrorNotice title="Couldn't switch agent" message={providerSwitch.switchProviderError} onDismiss={providerSwitch.resetSwitchProviderError} />
 				) : pendingSwitch ? (

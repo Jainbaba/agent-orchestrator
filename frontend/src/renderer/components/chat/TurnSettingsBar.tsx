@@ -104,6 +104,7 @@ export function TurnSettingsBar({
 	agentSwitch,
 	beforePicker,
 	afterPermissions,
+	ultrathink,
 	children,
 }: {
 	models: ChatModel[];
@@ -151,6 +152,11 @@ export function TurnSettingsBar({
 	beforePicker?: ReactNode;
 	/** A control after the permission picker, such as the switch to the terminal view. */
 	afterPermissions?: ReactNode;
+	/**
+	 * Claude Code's deepest reasoning. It is asked for in the message, not set
+	 * on the agent, so it is one more stop past the agent's own effort levels.
+	 */
+	ultrathink?: UltrathinkControl;
 	/** Inline controls on the right model row, before the mode/approval picker — queue vs steer. */
 	children?: ReactNode;
 }) {
@@ -295,6 +301,7 @@ export function TurnSettingsBar({
 		}
 		: fastControls;
 	const acpDefaultChoice = primaryEffortOption?.choices.some((choice) => choice.value === "default");
+	const offersUltrathink = Boolean(ultrathink && harness === "claude-code" && primaryEffortOption && onChangeConfigOption);
 	const current: CurrentAgentChoices = nativeModelMenu && onChange
 		? {
 			models: (harness === "claude-code" ? displayModels.filter((model) => model.id !== "default") : displayModels)
@@ -327,18 +334,28 @@ export function TurnSettingsBar({
 			onPickModel: primaryModelOption && onChangeConfigOption
 				? (id) => applyOption(primaryModelOption.id, { value: id })
 				: undefined,
-			efforts: (primaryEffortOption?.choices ?? [])
-				.filter((choice) => choice.value && choice.value !== "default")
-				.map((choice) => ({ value: choice.value, label: choice.name })),
-			effort: primaryEffortOption?.currentValue && primaryEffortOption.currentValue !== "default"
-				? primaryEffortOption.currentValue
-				: undefined,
+			efforts: [
+				...(primaryEffortOption?.choices ?? [])
+					.filter((choice) => choice.value && choice.value !== "default")
+					.map((choice) => ({ value: choice.value, label: choice.name })),
+				...(offersUltrathink ? [{ value: ULTRATHINK, label: "Ultrathink" }] : []),
+			],
+			effort: offersUltrathink && ultrathink?.on
+				? ULTRATHINK
+				: primaryEffortOption?.currentValue && primaryEffortOption.currentValue !== "default"
+					? primaryEffortOption.currentValue
+					: undefined,
 			onPickEffort: primaryEffortOption && onChangeConfigOption
-				? (value) => applyOption(primaryEffortOption.id, { value })
+				? (value) => {
+					ultrathink?.onChange(value === ULTRATHINK);
+					if (value !== ULTRATHINK) applyOption(primaryEffortOption.id, { value });
+				}
 				: undefined,
-			onResetEffort: primaryEffortOption && onChangeConfigOption && acpDefaultChoice && primaryEffortOption.currentValue !== "default"
-				? () => applyOption(primaryEffortOption.id, { value: "default" })
-				: undefined,
+			onResetEffort: offersUltrathink && ultrathink?.on
+				? () => ultrathink.onChange(false)
+				: primaryEffortOption && onChangeConfigOption && acpDefaultChoice && primaryEffortOption.currentValue !== "default"
+					? () => applyOption(primaryEffortOption.id, { value: "default" })
+					: undefined,
 			...fastControls,
 		};
 	// Plan mode and the on/off settings live in the add menu. What is left here
@@ -1186,6 +1203,18 @@ export function ComposerMenuRow({
  * other switch it advertises. They read and write the same options as the
  * model picker, so the two always agree.
  */
+const ULTRATHINK = "ultrathink";
+
+export interface UltrathinkControl {
+	on: boolean;
+	onChange: (on: boolean) => void;
+}
+
+/** Claude Code reads this keyword in a message as a request for its deepest reasoning on that turn. */
+export function withUltrathink(text: string): string {
+	return /\bultrathink\b/i.test(text) ? text : `Ultrathink:\n${text}`;
+}
+
 export function ComposerModeItems({
 	configOptions,
 	settings,

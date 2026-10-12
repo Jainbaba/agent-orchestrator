@@ -123,7 +123,7 @@ import type { QueuedMessageEditOptions } from "../../types/conversation";
 import { QueuedMessageDock, type QueuedMessage } from "./QueuedMessageDock";
 import { ActivityRun } from "./ActivityRun";
 import { TurnPlan } from "./TurnPlan";
-import { ComposerModeItems, TurnSettingsBar } from "./TurnSettingsBar";
+import { ComposerModeItems, TurnSettingsBar, type UltrathinkControl } from "./TurnSettingsBar";
 import { ElicitationDock } from "./ElicitationDock";
 import { McpServerBanner, ReauthBanner, ThreadStateBanner } from "./ChatStatusBanners";
 import {
@@ -351,6 +351,7 @@ export interface ChatWorkspaceProps {
 	composerNotice?: ReactNode;
 	/** A control after the permission picker, such as the switch to the terminal view. */
 	composerAction?: ReactNode;
+	ultrathink?: UltrathinkControl;
 	/** The AO session this surface renders for. Used to attach the reviewer pane. */
 	session?: WorkspaceSession;
 	/** Refresh the owning workspace cache after the shared primary tab is renamed. */
@@ -606,6 +607,7 @@ function ChatWorkspaceContent({
 	agentSwitch,
 	composerNotice,
 	composerAction,
+	ultrathink,
 	onChooseSettings,
 	onRememberPermissions,
 	showApprovalMode,
@@ -1148,6 +1150,7 @@ function ChatWorkspaceContent({
 					agentSwitch={agentSwitch}
 					beforePicker={agentSwitch ? <ContextMeter usage={stableUsage} /> : undefined}
 					afterPermissions={composerAction}
+					ultrathink={ultrathink}
 					models={models ?? []}
 					settings={stableSettings}
 					onRememberPermissions={onRememberPermissions}
@@ -1181,6 +1184,7 @@ function ChatWorkspaceContent({
 			models,
 			agentSwitch,
 			composerAction,
+			ultrathink,
 			stableUsage,
 			newWorkDisabled,
 			session?.provisionState,
