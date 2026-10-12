@@ -401,8 +401,8 @@ export function AgentModelPicker({
 									fast: favorite.fast, fastMode: favorite.fast,
 								});
 							}
-							// Its own tab has the effort and speed settings.
-							setOpenTab(favorite.harness);
+							// A favourite already carries its settings, so the picker stays here.
+							setOpenTab(FAVORITES_TAB);
 						}}
 					/>
 				) : tab === currentHarness && terminal ? (
@@ -729,7 +729,7 @@ function FavoriteStar({ starred, onToggle }: { starred: boolean; onToggle: () =>
 	);
 }
 
-/** Starred models from every agent, as one list. Picking one opens its agent's tab. */
+/** Starred models from every agent, as one list. Picking one selects it in place. */
 function FavoritesPanel({
 	agents,
 	hidden,
