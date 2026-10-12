@@ -78,7 +78,7 @@ import { useHostConnection } from "../hooks/useHostConnection";
 import { sessionReviewsQueryKey } from "../lib/session-reviews";
 import { sessionUiKey } from "../lib/hosts";
 import { resolveSessionWorkspacePath, sessionWorkspaceFilesQueryOptions } from "../hooks/useSessionWorkspaceFiles";
-import { isAbsoluteFileReference, matchWorkspaceFilePath } from "../lib/workspace-file-path";
+import { isAbsoluteFileReference, matchWorkspaceFilePath, normalizeWorkspaceFileReference } from "../lib/workspace-file-path";
 import { markFileViewerPerformance } from "../lib/file-viewer-performance";
 import { aoBridge } from "../lib/bridge";
 import {
@@ -1513,14 +1513,15 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 	const revealResolvedWorkspaceFile = useCallback(
 		async (rawPath: string, options?: FileOpenOptions) => {
 			const data = await fetchWorkspaceFiles();
-			const path = matchWorkspaceFilePath(rawPath, data.files ?? []);
-			if (!isAbsoluteFileReference(path)) {
-				openCenterFile(path, options);
+			const files = data.files ?? [];
+			const reference = normalizeWorkspaceFileReference(rawPath);
+			if (!isAbsoluteFileReference(reference)) {
+				openCenterFile(matchWorkspaceFilePath(rawPath, files), options);
 				return;
 			}
 			// The renderer is never told where a session's worktree lives, so the
 			// daemon decides which root an absolute path belongs to.
-			const resolved = await resolveSessionWorkspacePath(sessionId, path, hostId);
+			const resolved = await resolveSessionWorkspacePath(sessionId, reference, hostId);
 			if (resolved?.kind === "workspace") {
 				openCenterFile(resolved.path, options);
 				return;
@@ -1529,9 +1530,10 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 				handleOpenArtifact({ path: resolved.path });
 				return;
 			}
-			// Outside the session, or the daemon could not say: the file pane
-			// explains that instead of fetching a path the daemon will reject.
-			openCenterFile(path, options);
+			// Outside the session: open the path as written so the file pane says
+			// so, instead of a same-named workspace file. When the daemon could not
+			// answer (a remote host on an older build), guess from the file list.
+			openCenterFile(resolved?.kind === "outside" ? reference : matchWorkspaceFilePath(rawPath, files), options);
 		},
 		[browserOnly, fetchWorkspaceFiles, handleOpenArtifact, hostId, openCenterFile, sessionId],
 	);

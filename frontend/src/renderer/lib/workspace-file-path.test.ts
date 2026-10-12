@@ -35,15 +35,10 @@ describe("matchWorkspaceFilePath", () => {
 		expect(matchWorkspaceFilePath("docs/report.md#L12-L18", files)).toBe("docs/report.md");
 	});
 
-	it("returns absolute references normalized for the daemon to resolve", () => {
+	it("resolves encoded absolute file urls against workspace files", () => {
 		expect(
 			matchWorkspaceFilePath("file:///Users/me/project/docs/report.md%3A42", files),
-		).toBe("/Users/me/project/docs/report.md");
-	});
-
-	it("does not match an outside absolute path by suffix or basename", () => {
-		expect(matchWorkspaceFilePath("/Users/me/other-repo/src/a.ts:12", files)).toBe("/Users/me/other-repo/src/a.ts");
-		expect(matchWorkspaceFilePath("~/elsewhere/a.ts", files)).toBe("~/elsewhere/a.ts");
+		).toBe("docs/report.md");
 	});
 
 	it("recognizes absolute file references", () => {

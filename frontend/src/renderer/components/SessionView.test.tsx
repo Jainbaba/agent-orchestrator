@@ -5024,16 +5024,42 @@ describe("SessionView", () => {
 		});
 	});
 
-	it("keeps the absolute chat path when the daemon cannot resolve it", async () => {
-		const defaultGet = reviewGetMock.getMockImplementation()!;
-		reviewGetMock.mockImplementation(async (path: string, ...args: unknown[]) =>
-			path === "/api/v1/sessions/{sessionId}/workspace/resolve"
-				? { data: undefined, error: { code: "NOT_IMPLEMENTED" } }
-				: defaultGet(path, ...args));
+	function mockAbsolutePathLookup(resolve: unknown) {
+		reviewGetMock.mockImplementation(async (path: string) => {
+			if (path === "/api/v1/sessions/{sessionId}/workspace/resolve") return resolve;
+			if (path === "/api/v1/sessions/{sessionId}/workspace/manifest") {
+				return {
+					data: {
+						sessionId: "sess-orch",
+						files: [{ path: "src/App.tsx", status: "modified", additions: 1, deletions: 0, binary: false, size: 10 }],
+						truncated: false,
+						sections: { staged: [], unstaged: [], untracked: [], committed: [] },
+						commits: [],
+						summary: { files: 1, additions: 1, deletions: 0 },
+					},
+					error: undefined,
+				};
+			}
+			return { data: { reviewerHandleId: "", reviews: [], runs: [] }, error: undefined };
+		});
+	}
+
+	it("does not open a same-named workspace file for a path the daemon places outside the session", async () => {
+		mockAbsolutePathLookup({ data: { sessionId: "sess-orch", kind: "outside", path: "" }, error: undefined });
 		workerSession("sess-orch").mode = "chat";
 		render(<SessionView sessionId="sess-orch" />);
 		fireEvent.click(screen.getByRole("button", { name: "open chat absolute path" }));
 		expect(await screen.findByTestId("session-file-workspace")).toHaveTextContent("/Users/me/worktrees/s/src/App.tsx");
+	});
+
+	it("falls back to the file list when the daemon cannot resolve an absolute chat path", async () => {
+		mockAbsolutePathLookup({ data: undefined, error: { code: "NOT_IMPLEMENTED" } });
+		workerSession("sess-orch").mode = "chat";
+		render(<SessionView sessionId="sess-orch" />);
+		fireEvent.click(screen.getByRole("button", { name: "open chat absolute path" }));
+		const file = await screen.findByTestId("session-file-workspace");
+		expect(file).toHaveTextContent("src/App.tsx");
+		expect(file).not.toHaveTextContent("/Users/me");
 	});
 
 	it("does not ask the daemon about relative chat paths", async () => {
