@@ -4,6 +4,7 @@ import {
 	findWorkspaceFilePath,
 	isAbsoluteFileReference,
 	matchWorkspaceFilePath,
+	workspaceFileOpenTarget,
 	normalizeWorkspaceFileReference,
 	workspaceFileReferenceLine,
 } from "./workspace-file-path";
@@ -39,6 +40,14 @@ describe("matchWorkspaceFilePath", () => {
 		expect(
 			matchWorkspaceFilePath("file:///Users/me/project/docs/report.md%3A42", files),
 		).toBe("docs/report.md");
+	});
+
+	it("keeps an absolute reference as the open target instead of its file-list match", () => {
+		expect(workspaceFileOpenTarget("/other-repo/src/a.ts:12", "src/a.ts")).toBe("/other-repo/src/a.ts");
+		expect(workspaceFileOpenTarget("file:///other-repo/src/a.ts", "src/a.ts")).toBe("/other-repo/src/a.ts");
+		expect(workspaceFileOpenTarget("C:\\repo\\src\\a.ts", "src/a.ts")).toBe("C:/repo/src/a.ts");
+		expect(workspaceFileOpenTarget("a.ts:12", "src/a.ts")).toBe("src/a.ts");
+		expect(workspaceFileOpenTarget("./src/a.ts", "src/a.ts")).toBe("src/a.ts");
 	});
 
 	it("recognizes absolute file references", () => {

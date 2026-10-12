@@ -95,7 +95,7 @@ import { isMacPlatform } from "../lib/platform";
 import { useShell } from "../lib/shell-context";
 import { cn } from "../lib/utils";
 import { usesPreviewWorkspaceData } from "../lib/preview-mode";
-import { isOrchestratorSession, sessionAgentExited, sessionIsActive } from "../types/workspace";
+import { isOrchestratorSession, sessionAgentExited, sessionIsActive, type SessionArtifact, type WorkspaceSummary } from "../types/workspace";
 import { terminalTargetBelongsToSession, type TerminalTarget } from "../types/terminal";
 import { useCloudSessionPresence } from "../hooks/useCloudSessionPresence";
 import { focusAfterPaint, useSessionShortcut } from "../hooks/useAppShortcut";
@@ -1510,13 +1510,32 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 		[browserOnly, prepareFilesInspector, uiSessionId],
 	);
 
+	// A file written moments ago, or one past the artifact list cap, is not in
+	// the cached session, and the Files inspector can only show listed
+	// artifacts. Refresh once before deciding it cannot be opened.
+	const revealResolvedArtifact = useCallback(
+		async (path: string) => {
+			if (browserOnly) return false;
+			const listed = (artifacts: SessionArtifact[] | undefined) => artifacts?.some((artifact) => artifact.path === path) ?? false;
+			if (!listed(session?.artifactFiles)) {
+				await refreshWorkspaces();
+				const refreshed = queryClient.getQueryData<WorkspaceSummary[]>(workspaceQueryKeyForHost(hostId))
+					?.flatMap((workspace) => workspace.sessions)
+					.find((candidate) => candidate.id === sessionId);
+				if (!listed(refreshed?.artifactFiles)) return false;
+			}
+			handleOpenArtifact({ path });
+			return true;
+		},
+		[browserOnly, handleOpenArtifact, hostId, queryClient, refreshWorkspaces, session?.artifactFiles, sessionId],
+	);
+
 	const revealResolvedWorkspaceFile = useCallback(
 		async (rawPath: string, options?: FileOpenOptions) => {
-			const data = await fetchWorkspaceFiles();
-			const files = data.files ?? [];
 			const reference = normalizeWorkspaceFileReference(rawPath);
 			if (!isAbsoluteFileReference(reference)) {
-				openCenterFile(matchWorkspaceFilePath(rawPath, files), options);
+				const data = await fetchWorkspaceFiles();
+				openCenterFile(matchWorkspaceFilePath(rawPath, data.files ?? []), options);
 				return;
 			}
 			// The renderer is never told where a session's worktree lives, so the
@@ -1526,16 +1545,13 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 				openCenterFile(resolved.path, options);
 				return;
 			}
-			if (resolved?.kind === "artifact" && !browserOnly) {
-				handleOpenArtifact({ path: resolved.path });
-				return;
-			}
-			// Outside the session: open the path as written so the file pane says
-			// so, instead of a same-named workspace file. When the daemon could not
-			// answer (a remote host on an older build), guess from the file list.
-			openCenterFile(resolved?.kind === "outside" ? reference : matchWorkspaceFilePath(rawPath, files), options);
+			if (resolved?.kind === "artifact" && await revealResolvedArtifact(resolved.path)) return;
+			// Outside the session, or the daemon could not say. Nothing shows the
+			// path belongs here, so open it as written and let the file pane say
+			// so, rather than a workspace file that happens to share its name.
+			openCenterFile(reference, options);
 		},
-		[browserOnly, fetchWorkspaceFiles, handleOpenArtifact, hostId, openCenterFile, sessionId],
+		[fetchWorkspaceFiles, hostId, openCenterFile, revealResolvedArtifact, sessionId],
 	);
 
 	// A reveal is one-shot. Left in place, it would reopen the file (and take

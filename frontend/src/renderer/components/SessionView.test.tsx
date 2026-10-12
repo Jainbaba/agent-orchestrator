@@ -5052,14 +5052,36 @@ describe("SessionView", () => {
 		expect(await screen.findByTestId("session-file-workspace")).toHaveTextContent("/Users/me/worktrees/s/src/App.tsx");
 	});
 
-	it("falls back to the file list when the daemon cannot resolve an absolute chat path", async () => {
+	it("does not guess from the file list when the daemon cannot resolve an absolute chat path", async () => {
 		mockAbsolutePathLookup({ data: undefined, error: { code: "NOT_IMPLEMENTED" } });
 		workerSession("sess-orch").mode = "chat";
 		render(<SessionView sessionId="sess-orch" />);
 		fireEvent.click(screen.getByRole("button", { name: "open chat absolute path" }));
-		const file = await screen.findByTestId("session-file-workspace");
-		expect(file).toHaveTextContent("src/App.tsx");
-		expect(file).not.toHaveTextContent("/Users/me");
+		expect(await screen.findByTestId("session-file-workspace")).toHaveTextContent("/Users/me/worktrees/s/src/App.tsx");
+	});
+
+	it("opens an absolute chat path to a listed artifact in the Files artifact viewer", async () => {
+		const worker = workerSession("sess-1");
+		worker.mode = "chat";
+		worker.artifactFiles = [{ kind: "markdown", name: "report.md", path: "out/report.md", size: 10, updatedAt: "2026-06-10T00:00:00Z" }];
+		mockAbsolutePathLookup({ data: { sessionId: "sess-1", kind: "artifact", path: "out/report.md" }, error: undefined });
+		try {
+			render(<SessionView sessionId="sess-1" />);
+			fireEvent.click(screen.getByRole("button", { name: "open chat absolute path" }));
+			expect(await screen.findByText("selected out/report.md")).toBeInTheDocument();
+			expect(screen.queryByTestId("session-file-workspace")).not.toBeInTheDocument();
+		} finally {
+			delete worker.artifactFiles;
+		}
+	});
+
+	it("explains an artifact the session still does not list after a refresh", async () => {
+		workerSession("sess-1").mode = "chat";
+		mockAbsolutePathLookup({ data: { sessionId: "sess-1", kind: "artifact", path: "out/new.md" }, error: undefined });
+		render(<SessionView sessionId="sess-1" />);
+		fireEvent.click(screen.getByRole("button", { name: "open chat absolute path" }));
+		expect(await screen.findByTestId("session-file-workspace")).toHaveTextContent("/Users/me/worktrees/s/src/App.tsx");
+		expect(screen.queryByText("selected out/new.md")).not.toBeInTheDocument();
 	});
 
 	it("does not ask the daemon about relative chat paths", async () => {
