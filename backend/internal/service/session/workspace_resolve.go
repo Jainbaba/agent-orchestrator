@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
@@ -48,9 +49,10 @@ func (s *Service) ResolveWorkspacePath(ctx context.Context, id domain.SessionID,
 	target := expandHomePath(trimmed)
 	if !filepath.IsAbs(target) {
 		// A rooted path that is not absolute here (a Unix path on a Windows
-		// daemon, or a drive-relative one) names somewhere this session does
-		// not own; it is not a malformed relative path.
-		if path.IsAbs(filepath.ToSlash(target)) || filepath.VolumeName(target) != "" {
+		// daemon, a Windows drive or UNC path on a Unix one, or a drive-relative
+		// path) names somewhere this session does not own; it is not a
+		// malformed relative path.
+		if path.IsAbs(filepath.ToSlash(target)) || filepath.VolumeName(target) != "" || foreignAbsolutePath.MatchString(target) {
 			return WorkspacePathResolution{SessionID: id, Kind: WorkspacePathKindOutside}, nil
 		}
 		rel, err := cleanWorkspaceRelativePath(trimmed)
@@ -83,33 +85,49 @@ func expandHomePath(raw string) string {
 	return filepath.Join(home, strings.TrimPrefix(raw, "~"))
 }
 
+// foreignAbsolutePath matches Windows drive (C:\x, C:/x) and UNC (\\host\share)
+// spellings, which filepath does not treat as absolute on other platforms.
+var foreignAbsolutePath = regexp.MustCompile(`^(?:[A-Za-z]:[\\/]|\\\\)`)
+
 // relativeWithinRoot reports target relative to root when target is strictly
-// inside it. It compares both the symlink-resolved and the as-written
-// spellings, because a root under a symlinked directory can be written either
-// way and a target that does not exist yet cannot be resolved at all.
+// inside it. Containment is decided on symlink-resolved paths, so a link inside
+// the root that points out of it is not mistaken for a file the session owns;
+// a target that does not exist yet is resolved through its deepest existing
+// ancestor. The as-written spelling decides only when the root itself cannot
+// be resolved.
 func relativeWithinRoot(root, target string) (string, bool) {
 	root = strings.TrimSpace(root)
 	if root == "" || !filepath.IsAbs(root) {
 		return "", false
 	}
-	pairs := [][2]string{{filepath.Clean(root), filepath.Clean(target)}}
-	if resolvedRoot, err := resolvedFilesystemPath(root); err == nil {
-		pairs = append(pairs, [2]string{resolvedRoot, filepath.Clean(target)})
-		if resolvedTarget, ok := resolveExistingPrefix(target); ok {
-			pairs = append(pairs, [2]string{resolvedRoot, resolvedTarget})
+	cleanRoot, cleanTarget := filepath.Clean(root), filepath.Clean(target)
+	resolvedRoot, err := resolvedFilesystemPath(root)
+	if err != nil {
+		return relativeTo(cleanRoot, cleanTarget)
+	}
+	resolvedTarget, ok := resolveExistingPrefix(target)
+	if !ok || !pathWithin(resolvedRoot, resolvedTarget) {
+		return "", false
+	}
+	// Prefer the spelling the caller used: a link inside the root that stays
+	// inside it is addressed by the link's own path, not its destination's.
+	for _, base := range []string{cleanRoot, resolvedRoot} {
+		if rel, ok := relativeTo(base, cleanTarget); ok {
+			return rel, true
 		}
 	}
-	for _, pair := range pairs {
-		if !pathWithin(pair[0], pair[1]) {
-			continue
-		}
-		rel, err := filepath.Rel(pair[0], pair[1])
-		if err != nil {
-			continue
-		}
-		return filepath.ToSlash(rel), true
+	return relativeTo(resolvedRoot, resolvedTarget)
+}
+
+func relativeTo(root, target string) (string, bool) {
+	if !pathWithin(root, target) {
+		return "", false
 	}
-	return "", false
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
 }
 
 // resolveExistingPrefix resolves symlinks in the longest existing ancestor of

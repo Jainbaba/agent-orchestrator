@@ -76,3 +76,43 @@ func TestResolveWorkspacePathUnknownSession(t *testing.T) {
 	_, err := (&Service{store: newFakeStore()}).ResolveWorkspacePath(context.Background(), "missing", "/tmp/x")
 	assertAPIErrorCode(t, err, "SESSION_NOT_FOUND")
 }
+
+func TestResolveWorkspacePathFollowsSymlinksBeforeAcceptingContainment(t *testing.T) {
+	svc, workspace, artifacts := resolveFixture(t)
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	links := map[string]string{
+		filepath.Join(workspace, "escape"):   outside,
+		filepath.Join(artifacts, "escape"):   outside,
+		filepath.Join(workspace, "internal"): filepath.Join(workspace, "src"),
+	}
+	for link, dest := range links {
+		if err := os.Symlink(dest, link); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+	}
+	cases := []struct {
+		name     string
+		path     string
+		wantKind WorkspacePathKind
+		wantPath string
+	}{
+		{"existing file through a link out of the worktree", filepath.Join(workspace, "escape", "secret.txt"), WorkspacePathKindOutside, ""},
+		{"missing file through a link out of the worktree", filepath.Join(workspace, "escape", "new.txt"), WorkspacePathKindOutside, ""},
+		{"existing file through a link out of the artifact dir", filepath.Join(artifacts, "escape", "secret.txt"), WorkspacePathKindOutside, ""},
+		{"link that stays inside the worktree keeps its own spelling", filepath.Join(workspace, "internal", "app.ts"), WorkspacePathKindWorkspace, "internal/app.ts"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := svc.ResolveWorkspacePath(context.Background(), "ao-1", tc.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Kind != tc.wantKind || got.Path != tc.wantPath {
+				t.Fatalf("ResolveWorkspacePath(%q) = {%s %q}, want {%s %q}", tc.path, got.Kind, got.Path, tc.wantKind, tc.wantPath)
+			}
+		})
+	}
+}
