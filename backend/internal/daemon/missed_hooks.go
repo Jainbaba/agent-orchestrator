@@ -31,7 +31,7 @@ func replayMissedHooks(ctx context.Context, dataDir string, sessions missedHookS
 	last := map[domain.SessionID]ports.ActivitySignal{}
 	for line := range strings.SplitSeq(string(raw), "\n") {
 		found := missedHook.FindStringSubmatch(line)
-		if found == nil || found[4] == "subagent-stop" {
+		if len(found) != 5 || found[4] == "subagent-stop" {
 			continue
 		}
 		at, err := time.Parse(time.RFC3339, found[1])
