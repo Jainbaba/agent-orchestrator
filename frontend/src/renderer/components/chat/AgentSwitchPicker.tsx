@@ -12,7 +12,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
-import { Brain, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, TriangleAlert, X, Zap } from "lucide-react";
+import { Brain, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Star, TriangleAlert, X, Zap } from "lucide-react";
 import {
 	Fragment,
 	useCallback,
@@ -30,6 +30,7 @@ import { useAgentReadinessQuery } from "../../hooks/useAgentReadinessQuery";
 import { agentModelDisplayLabel } from "../../lib/agent-model-choices";
 import { agentLabel } from "../../lib/agent-options";
 import { CHAT_SWITCH_TARGETS, TERMINAL_SWITCH_TARGETS } from "../../lib/agent-switch-targets";
+import { toggleModelFavorite, useModelFavorites } from "../../lib/model-favorites";
 import {
 	collapseModelVariants,
 	findModelVariant,
@@ -89,6 +90,8 @@ export interface PickerModel {
 	label: string;
 	/** Models from several makers are listed under their maker. */
 	group?: string;
+	/** A quiet note beside the name, such as "default". */
+	hint?: string;
 }
 
 /** One agent's models and settings, with what each control does when used. */
@@ -318,6 +321,23 @@ export function AgentModelPicker({
 				style={extraRows > 0 ? { maxHeight: `calc(var(--size-select-menu-max) + ${extraRows * 2.85}rem)` } : undefined}
 			>
 				<AgentTabStrip>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={tab === FAVORITES_TAB}
+						aria-label="Favourite models"
+						title="Favourite models"
+						onClick={() => setOpenTab(FAVORITES_TAB)}
+						className={cn(
+							"relative flex w-8 shrink-0 items-center justify-center text-foreground",
+							tab === FAVORITES_TAB ? "opacity-100" : "opacity-60 hover:opacity-100",
+						)}
+					>
+						<Star aria-hidden="true" className={cn("size-icon-base", tab === FAVORITES_TAB ? "fill-current" : undefined)} />
+						{tab === FAVORITES_TAB ? (
+							<span aria-hidden="true" className="absolute inset-x-1.5 bottom-0 h-0.5 rounded-full bg-foreground" />
+						) : null}
+					</button>
 					{agents.map((agent) => (
 						<button
 							key={agent.id}
@@ -340,7 +360,24 @@ export function AgentModelPicker({
 						</button>
 					))}
 				</AgentTabStrip>
-				{tab === currentHarness && terminal ? (
+				{tab === FAVORITES_TAB ? (
+					<FavoritesPanel
+						agents={agents}
+						// A terminal's running agent cannot be given another model from here.
+						hidden={terminal ? currentHarness : undefined}
+						chosen={pending ? { harness: pending.harness, model: pending.model } : { harness: currentHarness, model: currentSource.modelId }}
+						onPick={(favorite) => {
+							if (favorite.harness === currentHarness) {
+								keepCurrent();
+								currentSource.onPickModel?.(favorite.model);
+							} else {
+								onPendingChange({ harness: favorite.harness, model: favorite.model, modelLabel: favorite.label });
+							}
+							// Its own tab has the effort and speed settings.
+							setOpenTab(favorite.harness);
+						}}
+					/>
+				) : tab === currentHarness && terminal ? (
 					<p className="px-3 py-2.5 text-xs text-muted-foreground">
 						{agentLabel(currentHarness)} is running here. Change its model from inside the terminal.
 					</p>
@@ -348,6 +385,7 @@ export function AgentModelPicker({
 					<>
 						<SourcePanel
 							source={currentSource}
+							harness={listsModelVariants(currentHarness) ? undefined : currentHarness}
 							chosenId={pending ? undefined : currentSource.modelId}
 							emptyLabel={agentLabel(currentHarness)}
 							beforeChange={keepCurrent}
@@ -482,7 +520,11 @@ function OtherAgentPanel({
 			autoCompactWindow: pending?.autoCompactWindow,
 		};
 		return {
-			models: [{ id: "", label: "Default model" }, ...listed],
+			// With a model list, the agent's default is one of its rows. The
+			// plain row is only for an agent that lists none.
+			models: listed.length > 0
+				? listed.map((model) => catalog?.find((entry) => entry.id === model.id)?.isDefault ? { ...model, hint: "default" } : model)
+				: [{ id: "", label: "Default model" }],
 			modelId: chosen,
 			modelLabel: pending?.modelLabel ?? agentLabel(harness),
 			onPickModel: (id) => {
@@ -517,7 +559,12 @@ function OtherAgentPanel({
 	const offersAutoCompact = terminal && harness === "claude-code" && !/haiku|opus-4-5/.test(pending?.model ?? "");
 	return (
 		<>
-			<SourcePanel source={source} chosenId={source.modelId} emptyLabel={agentLabel(harness)} />
+			<SourcePanel
+				source={source}
+				harness={listsModelVariants(harness) ? undefined : harness}
+				chosenId={source.modelId}
+				emptyLabel={agentLabel(harness)}
+			/>
 			{offersAutoCompact ? (
 				<div className="mt-1 border-t border-border pt-1">
 					<AutoCompactRow
@@ -536,16 +583,20 @@ function OtherAgentPanel({
 /** Search, the model list and the settings under it, for one agent. */
 function SourcePanel({
 	source,
+	harness,
 	chosenId,
 	emptyLabel,
 	beforeChange,
 }: {
+	/** The agent these models belong to. Set where a model can be starred. */
+	harness?: string;
 	source: PickerSource;
 	chosenId?: string;
 	emptyLabel: string;
 	/** Runs before any change made here is applied. */
 	beforeChange?: () => void;
 }) {
+	const favorites = useModelFavorites();
 	return (
 		<>
 			{source.models.length > 0 ? (
@@ -577,9 +628,16 @@ function SourcePanel({
 										beforeChange?.();
 										if (!active) source.onPickModel?.(model.id);
 									}}
-									className="text-xs text-foreground"
+									className="group/model text-xs text-foreground"
 								>
-									{model.label}
+									<span className="min-w-0 truncate">{model.label}</span>
+									{model.hint ? <span className="ml-2 shrink-0 text-[10px] text-muted-foreground/70">{model.hint}</span> : null}
+									{harness && model.id ? (
+										<FavoriteStar
+											starred={favorites.some((entry) => entry.harness === harness && entry.model === model.id)}
+											onToggle={() => toggleModelFavorite({ harness, model: model.id, label: model.label })}
+										/>
+									) : null}
 								</OptionMenuItem>
 							</Fragment>
 						);
@@ -601,6 +659,70 @@ function SourcePanel({
 }
 
 // Half the thumb, so the thumb sits flush with either end of the track.
+const FAVORITES_TAB = "favorites";
+
+/** The star at the end of a model row. It shows on hover, and stays once starred. */
+function FavoriteStar({ starred, onToggle }: { starred: boolean; onToggle: () => void }) {
+	return (
+		<span
+			role="button"
+			tabIndex={-1}
+			aria-label={starred ? "Remove from favourites" : "Add to favourites"}
+			title={starred ? "Remove from favourites" : "Add to favourites"}
+			// Starring must not also pick the model.
+			onPointerDown={(event) => event.stopPropagation()}
+			onPointerUp={(event) => event.stopPropagation()}
+			onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggle(); }}
+			className={cn(
+				"ml-auto flex size-5 shrink-0 items-center justify-center rounded hover:bg-interactive-active",
+				starred ? "text-warning" : "text-muted-foreground opacity-0 group-hover/model:opacity-100 group-data-highlighted/model:opacity-100",
+			)}
+		>
+			<Star aria-hidden="true" className={cn("size-3.5", starred ? "fill-current" : undefined)} />
+		</span>
+	);
+}
+
+/** Starred models from every agent, as one list. Picking one opens its agent's tab. */
+function FavoritesPanel({
+	agents,
+	hidden,
+	chosen,
+	onPick,
+}: {
+	agents: Array<{ id: string; label: string; blocked?: string }>;
+	hidden?: string;
+	chosen: { harness: string; model?: string };
+	onPick: (favorite: { harness: string; model: string; label: string }) => void;
+}) {
+	const favorites = useModelFavorites().filter((entry) => entry.harness !== hidden);
+	if (favorites.length === 0) {
+		return <p className="px-3 py-2.5 text-xs text-muted-foreground">Star a model in any agent's list to keep it here.</p>;
+	}
+	return (
+		<>
+			{favorites.map((favorite) => {
+				const agent = agents.find((entry) => entry.id === favorite.harness);
+				return (
+					<OptionMenuItem
+						key={`${favorite.harness}:${favorite.model}`}
+						active={chosen.harness === favorite.harness && chosen.model === favorite.model}
+						radio
+						disabled={!agent || Boolean(agent.blocked)}
+						title={agent?.blocked ? `${agent.label} · ${agent.blocked}` : agent?.label}
+						onSelect={(event) => { event.preventDefault(); onPick(favorite); }}
+						className="group/model text-xs text-foreground"
+					>
+						<ProviderMark provider={favorite.harness} className="mr-2 size-3.5" />
+						<span className="min-w-0 truncate">{favorite.label}</span>
+						<FavoriteStar starred onToggle={() => toggleModelFavorite(favorite)} />
+					</OptionMenuItem>
+				);
+			})}
+		</>
+	);
+}
+
 const SLIDER_INSET = 12;
 
 /** The top level some agents have past Max: Codex's "ultra", Claude Code's "ultracode". */
