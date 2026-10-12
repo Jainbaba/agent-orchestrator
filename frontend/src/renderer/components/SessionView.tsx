@@ -44,6 +44,7 @@ import { TopbarButton } from "./TopbarButton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useBrowserView } from "../hooks/useBrowserView";
 import { useFileAnnotation } from "../hooks/useFileAnnotation";
+import { useOpenArtifactPreview } from "../hooks/useOpenArtifactPreview";
 import {
 	adoptedShellHandle,
 	useCloseShellTerminal,
@@ -460,6 +461,7 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 	const setInspectorViewForSession = useUiStore((state) => state.setInspectorView);
 	const showGlobalToast = useUiStore((state) => state.showGlobalToast);
 	const setFilesChangedOnly = useUiStore((state) => state.setFilesChangedOnly);
+	const setFilesSource = useUiStore((state) => state.setFilesSource);
 	const workspaceFileOpenRequest = useUiStore((state) => state.workspaceFileOpenRequest);
 	const clearWorkspaceFileOpenRequest = useUiStore((state) => state.clearWorkspaceFileOpenRequest);
 	const initializeInspectorSession = useUiStore((state) => state.initializeInspectorSession);
@@ -1520,9 +1522,16 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 
 	const handleOpenFiles = useCallback(() => {
 		markFileViewerPerformance("files-click");
+		// Opens the workspace changes, replacing an artifact opened earlier.
+		setFilesSource(uiSessionId, { kind: "workspace" });
+		setFilePreviewRequestsBySession((current) => {
+			if (current[uiSessionId]?.source !== "artifact") return current;
+			const { [uiSessionId]: _artifact, ...rest } = current;
+			return rest;
+		});
 		prepareFilesInspector();
 		void fetchWorkspaceFiles();
-	}, [fetchWorkspaceFiles, prepareFilesInspector]);
+	}, [fetchWorkspaceFiles, prepareFilesInspector, setFilesSource, uiSessionId]);
 
 	const handleOpenReviewFile = useCallback(
 		(target: { line?: number; path: string }) => {
@@ -1559,11 +1568,18 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 			};
 		});
 	}, [uiSessionId]);
+	const openArtifactPreview = useOpenArtifactPreview(session?.id, session?.hostId);
 	useEffect(() => {
 		if (!workspaceFileOpenRequest || !session) return;
 		if (sessionUiKey(workspaceFileOpenRequest.sessionId, workspaceFileOpenRequest.hostId) !== uiSessionId) return;
-		const { nonce, path } = workspaceFileOpenRequest;
-		if (session.cloud) {
+		const { nonce, path, source } = workspaceFileOpenRequest;
+		if (source === "artifact") {
+			// Same routing as the Summary panel's artifact rows: HTML opens in
+			// the Browser panel, everything else in the Files artifact viewer.
+			const artifact = session.artifactFiles?.find((file) => file.path === path);
+			if (artifact?.kind === "html" && artifact.previewUrl) openArtifactPreview(artifact.previewUrl);
+			else handleOpenArtifact({ path });
+		} else if (session.cloud) {
 			prepareFilesInspector();
 			openCenterFile(path, { mode: "file" });
 		} else {
@@ -1572,7 +1588,9 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 		clearWorkspaceFileOpenRequest(nonce);
 	}, [
 		clearWorkspaceFileOpenRequest,
+		handleOpenArtifact,
 		handleOpenFile,
+		openArtifactPreview,
 		openCenterFile,
 		prepareFilesInspector,
 		session,

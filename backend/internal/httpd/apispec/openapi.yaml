@@ -11360,6 +11360,10 @@ components:
           items:
             $ref: '#/components/schemas/SessionPRFacts'
           type: array
+        requestedOutput:
+          enum:
+          - artifact
+          type: string
         reviewerConfig:
           $ref: '#/components/schemas/AgentConfig'
         reviewerHarness:
@@ -16651,6 +16655,10 @@ components:
           maxLength: 16384
           type: string
         providerAccountId:
+          type: string
+        requestedOutput:
+          enum:
+          - artifact
           type: string
         trackerProvider:
           enum:
