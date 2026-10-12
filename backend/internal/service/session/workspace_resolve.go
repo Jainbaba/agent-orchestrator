@@ -72,15 +72,15 @@ func (s *Service) ResolveWorkspacePath(ctx context.Context, id domain.SessionID,
 	return WorkspacePathResolution{SessionID: id, Kind: WorkspacePathKindOutside}, nil
 }
 
-func expandHomePath(path string) string {
-	if path != "~" && !strings.HasPrefix(path, "~/") {
-		return path
+func expandHomePath(raw string) string {
+	if raw != "~" && !strings.HasPrefix(raw, "~/") {
+		return raw
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
-		return path
+		return raw
 	}
-	return filepath.Join(home, strings.TrimPrefix(path, "~"))
+	return filepath.Join(home, strings.TrimPrefix(raw, "~"))
 }
 
 // relativeWithinRoot reports target relative to root when target is strictly
