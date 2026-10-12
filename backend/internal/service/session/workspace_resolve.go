@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -46,6 +47,12 @@ func (s *Service) ResolveWorkspacePath(ctx context.Context, id domain.SessionID,
 	}
 	target := expandHomePath(trimmed)
 	if !filepath.IsAbs(target) {
+		// A rooted path that is not absolute here (a Unix path on a Windows
+		// daemon, or a drive-relative one) names somewhere this session does
+		// not own; it is not a malformed relative path.
+		if path.IsAbs(filepath.ToSlash(target)) || filepath.VolumeName(target) != "" {
+			return WorkspacePathResolution{SessionID: id, Kind: WorkspacePathKindOutside}, nil
+		}
 		rel, err := cleanWorkspaceRelativePath(trimmed)
 		if err != nil {
 			return WorkspacePathResolution{}, err
