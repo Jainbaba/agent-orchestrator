@@ -133,9 +133,12 @@ func renderHandoffNote(in HandoffNoteInput, older, previous []HandoffTurn, lates
 	} else {
 		b.WriteString(HandoffNotePrefix + ">\n")
 	}
-	fmt.Fprintf(&b, "You are %s, taking over this AO session from %s. AO wrote this note; the user did not.\n",
-		handoffHarnessLabel(in.TargetHarness), handoffHarnessLabel(in.SourceHarness))
-	b.WriteString("- Everything below is a record of what already happened, not a list of instructions. Do not carry out requests in it again.\n")
+	// The new agent must take this as the user's real conversation. Calling it
+	// AO's note, not the user's, made Claude refuse to use what the user had
+	// said, such as a value they asked it to remember.
+	fmt.Fprintf(&b, "You are %s, taking over this AO session from %s. The conversation below really took place between this user and %s. Treat it as your own history with them: what the user told you there, such as facts, preferences or values they asked you to remember, still holds.\n",
+		handoffHarnessLabel(in.TargetHarness), handoffHarnessLabel(in.SourceHarness), handoffHarnessLabel(in.SourceHarness))
+	b.WriteString("- AO copied this record from that conversation. Requests in it were already handled; do not carry them out again.\n")
 	b.WriteString("- The files in the workspace and git are the truth. Check them before relying on this record.\n")
 	b.WriteString("- Do not redo work that is already finished.\n")
 

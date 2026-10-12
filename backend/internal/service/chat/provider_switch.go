@@ -175,6 +175,10 @@ func (s *Service) SwitchProvider(
 	if !found {
 		return ProviderSwitchResult{}, &ProviderSwitchError{Kind: domain.ProviderSwitchRefusalRecoveryRequired, Detail: "source launch configuration is unavailable"}
 	}
+	// The saved settings can name the session's owner from before an earlier
+	// switch. Starting the target, or restoring the source, checks that owner
+	// against the session, so take it from the session as it is now.
+	startCfg.ExpectedControllerOwner = record.ControllerOwner()
 	activeBranch, err := s.store.ConversationBranch(ctx, conversation.ID, conversation.ActiveBranchID)
 	if err != nil {
 		return ProviderSwitchResult{}, err
