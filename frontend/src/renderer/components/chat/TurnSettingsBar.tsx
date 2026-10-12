@@ -339,6 +339,12 @@ export function TurnSettingsBar({
 			efforts: efforts.map((value) => ({ value, label: formatEffortLabel(value, t) })),
 			effort: effortLabel,
 			onPickEffort: (value) => onChange({ ...settings, reasoningEffort: value }),
+			onPickSetup: (setup) => onChange({
+				...settings,
+				model: setup.model,
+				reasoningEffort: setup.effort,
+				fastMode: (setup.fast && displayModels.find((model) => model.id === setup.model)?.supportsFast) || undefined,
+			}),
 			onResetEffort: nativeDefaultEffort && nativeDefaultEffort !== effortLabel
 				? () => onChange({ ...settings, reasoningEffort: nativeDefaultEffort })
 				: undefined,
@@ -354,6 +360,17 @@ export function TurnSettingsBar({
 			modelLabel: primaryModelOption ? optionCurrentLabel(primaryModelOption) : agentLabel(harness ?? ""),
 			onPickModel: primaryModelOption && onChangeConfigOption
 				? (id) => applyOption(primaryModelOption.id, { value: id })
+				: undefined,
+			// The effort is set after the model, because the agent offers levels per model.
+			onPickSetup: primaryModelOption && onChangeConfigOption
+				? (setup) => {
+					ultracode?.onChange(false);
+					void Promise.resolve(onChangeConfigOption(primaryModelOption.id, { value: setup.model }))
+						.then(() => setup.effort && primaryEffortOption
+							? onChangeConfigOption(primaryEffortOption.id, { value: setup.effort })
+							: undefined)
+						.catch(() => {});
+				}
 				: undefined,
 			efforts: [
 				...(primaryEffortOption?.choices ?? [])

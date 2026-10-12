@@ -1,10 +1,21 @@
 import { useSyncExternalStore } from "react";
 
-/** A model the user starred in the agent picker, with the agent it belongs to. */
+/**
+ * A model the user starred in the agent picker, with the settings it had: one
+ * favourite per model row. For an agent whose catalog folds settings into the
+ * model id (Cursor), `model` is that exact variant.
+ */
 export interface ModelFavorite {
 	harness: string;
+	/** The row in the agent's model list. */
+	row: string;
+	/** The model id to select. */
 	model: string;
 	label: string;
+	effort?: string;
+	effortLabel?: string;
+	fast?: boolean;
+	thinking?: boolean;
 }
 
 const STORAGE_KEY = "ao.chat.modelFavorites";
@@ -16,8 +27,10 @@ function read(): ModelFavorite[] {
 	try {
 		const parsed: unknown = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
 		cached = Array.isArray(parsed)
-			? parsed.filter((entry): entry is ModelFavorite =>
-				typeof entry?.harness === "string" && typeof entry?.model === "string" && typeof entry?.label === "string")
+			? parsed
+				.filter((entry) => typeof entry?.harness === "string" && typeof entry?.model === "string" && typeof entry?.label === "string")
+				// A favourite saved before rows were recorded was a plain model.
+				.map((entry) => ({ ...entry, row: typeof entry.row === "string" ? entry.row : entry.model }) as ModelFavorite)
 			: [];
 	} catch {
 		cached = [];
@@ -43,7 +56,7 @@ function subscribe(listener: () => void) {
 /** Adds the model to the favourites, or removes it if it is already one. */
 export function toggleModelFavorite(favorite: ModelFavorite) {
 	const current = read();
-	const kept = current.filter((entry) => entry.harness !== favorite.harness || entry.model !== favorite.model);
+	const kept = current.filter((entry) => entry.harness !== favorite.harness || entry.row !== favorite.row);
 	write(kept.length === current.length ? [...current, favorite] : kept);
 }
 

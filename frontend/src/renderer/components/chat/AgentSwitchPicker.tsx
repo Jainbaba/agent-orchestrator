@@ -30,7 +30,7 @@ import { useAgentReadinessQuery } from "../../hooks/useAgentReadinessQuery";
 import { agentModelDisplayLabel } from "../../lib/agent-model-choices";
 import { agentLabel } from "../../lib/agent-options";
 import { CHAT_SWITCH_TARGETS, TERMINAL_SWITCH_TARGETS } from "../../lib/agent-switch-targets";
-import { toggleModelFavorite, useModelFavorites } from "../../lib/model-favorites";
+import { toggleModelFavorite, useModelFavorites, type ModelFavorite } from "../../lib/model-favorites";
 import {
 	collapseModelVariants,
 	findModelVariant,
@@ -92,14 +92,20 @@ export interface PickerModel {
 	group?: string;
 	/** A quiet note beside the name, such as "default". */
 	hint?: string;
+	/** The id to select for this row, where it differs from the row's own id. */
+	sendId?: string;
 }
 
 /** One agent's models and settings, with what each control does when used. */
 export interface PickerSource {
 	models: PickerModel[];
 	modelId?: string;
+	/** The id of the selection, where it differs from the chosen row's id. */
+	sendId?: string;
 	modelLabel: string;
 	onPickModel?: (id: string) => void;
+	/** Selects a model together with its settings in one step, for a favourite. */
+	onPickSetup?: (setup: ModelFavorite) => void;
 	efforts: EffortChoice[];
 	effort?: string;
 	onPickEffort?: (value: string) => void;
@@ -149,8 +155,16 @@ function variantSource(
 		: undefined;
 	const resettable = Boolean(onPick && family && variant && variant.id !== family.defaultVariant.id);
 	return {
-		models: families.map((entry) => ({ id: entry.id, label: entry.label, group: entry.group })),
+		models: families.map((entry) => ({ id: entry.id, label: entry.label, group: entry.group, sendId: entry.defaultVariant.id })),
 		modelId: family?.id,
+		sendId: variant?.id,
+		onPickSetup: onPick
+			? (setup) => {
+				const found = findModelVariant(families, setup.model);
+				if (!found) return;
+				onPick({ id: found.variant.id, label: found.family.label, effort: found.variant.effort, fast: found.variant.fast, thinking: found.variant.thinking });
+			}
+			: undefined,
 		modelLabel: family?.label ?? fallbackLabel,
 		onPickModel: onPick
 			? (id) => {
@@ -262,6 +276,7 @@ export function AgentModelPicker({
 			? {
 				...base,
 				onPickModel: undefined,
+				onPickSetup: undefined,
 				onPickEffort: undefined,
 				onResetEffort: undefined,
 				onToggleFast: undefined,
@@ -365,13 +380,26 @@ export function AgentModelPicker({
 						agents={agents}
 						// A terminal's running agent cannot be given another model from here.
 						hidden={terminal ? currentHarness : undefined}
-						chosen={pending ? { harness: pending.harness, model: pending.model } : { harness: currentHarness, model: currentSource.modelId }}
+						chosen={pending
+							? { harness: pending.harness, model: pending.model }
+							: { harness: currentHarness, model: currentSource.sendId ?? currentSource.modelId }}
 						onPick={(favorite) => {
 							if (favorite.harness === currentHarness) {
 								keepCurrent();
-								currentSource.onPickModel?.(favorite.model);
+								if (currentSource.onPickSetup) currentSource.onPickSetup(favorite);
+								else currentSource.onPickModel?.(favorite.model);
+							} else if (listsModelVariants(favorite.harness)) {
+								// The variant id already carries its effort, thinking and speed.
+								onPendingChange({
+									harness: favorite.harness, model: favorite.model, modelLabel: favorite.label,
+									shownEffort: favorite.effort, fast: favorite.fast, thinking: favorite.thinking,
+								});
 							} else {
-								onPendingChange({ harness: favorite.harness, model: favorite.model, modelLabel: favorite.label });
+								onPendingChange({
+									harness: favorite.harness, model: favorite.model, modelLabel: favorite.label,
+									effort: favorite.effort, shownEffort: favorite.effort,
+									fast: favorite.fast, fastMode: favorite.fast,
+								});
 							}
 							// Its own tab has the effort and speed settings.
 							setOpenTab(favorite.harness);
@@ -385,7 +413,7 @@ export function AgentModelPicker({
 					<>
 						<SourcePanel
 							source={currentSource}
-							harness={listsModelVariants(currentHarness) ? undefined : currentHarness}
+							harness={currentHarness}
 							chosenId={pending ? undefined : currentSource.modelId}
 							emptyLabel={agentLabel(currentHarness)}
 							beforeChange={keepCurrent}
@@ -561,7 +589,7 @@ function OtherAgentPanel({
 		<>
 			<SourcePanel
 				source={source}
-				harness={listsModelVariants(harness) ? undefined : harness}
+				harness={harness}
 				chosenId={source.modelId}
 				emptyLabel={agentLabel(harness)}
 			/>
@@ -634,8 +662,8 @@ function SourcePanel({
 									{model.hint ? <span className="ml-2 shrink-0 text-[10px] text-muted-foreground/70">{model.hint}</span> : null}
 									{harness && model.id ? (
 										<FavoriteStar
-											starred={favorites.some((entry) => entry.harness === harness && entry.model === model.id)}
-											onToggle={() => toggleModelFavorite({ harness, model: model.id, label: model.label })}
+											starred={favorites.some((entry) => entry.harness === harness && entry.row === model.id)}
+											onToggle={() => toggleModelFavorite(favoriteFor(harness, model, active ? source : undefined))}
 										/>
 									) : null}
 								</OptionMenuItem>
@@ -660,6 +688,24 @@ function SourcePanel({
 
 // Half the thumb, so the thumb sits flush with either end of the track.
 const FAVORITES_TAB = "favorites";
+
+/**
+ * What starring a row saves. The chosen row is saved with the settings it has
+ * now; any other row is saved as the model on its own.
+ */
+function favoriteFor(harness: string, model: PickerModel, chosen: PickerSource | undefined): ModelFavorite {
+	const plain = { harness, row: model.id, model: model.sendId ?? model.id, label: model.label };
+	// Ultracode is asked for per message or at launch; it is not a level to restore.
+	if (!chosen || isUltraEffort(chosen.effort) && harness === "claude-code") return plain;
+	return {
+		...plain,
+		model: chosen.sendId ?? model.id,
+		effort: chosen.effort,
+		effortLabel: chosen.efforts.find((entry) => entry.value === chosen.effort)?.label,
+		fast: chosen.fast || undefined,
+		thinking: chosen.thinking || undefined,
+	};
+}
 
 /** The star at the end of a model row. It shows on hover, and stays once starred. */
 function FavoriteStar({ starred, onToggle }: { starred: boolean; onToggle: () => void }) {
@@ -693,7 +739,7 @@ function FavoritesPanel({
 	agents: Array<{ id: string; label: string; blocked?: string }>;
 	hidden?: string;
 	chosen: { harness: string; model?: string };
-	onPick: (favorite: { harness: string; model: string; label: string }) => void;
+	onPick: (favorite: ModelFavorite) => void;
 }) {
 	const favorites = useModelFavorites().filter((entry) => entry.harness !== hidden);
 	if (favorites.length === 0) {
@@ -705,7 +751,7 @@ function FavoritesPanel({
 				const agent = agents.find((entry) => entry.id === favorite.harness);
 				return (
 					<OptionMenuItem
-						key={`${favorite.harness}:${favorite.model}`}
+						key={`${favorite.harness}:${favorite.row}`}
 						active={chosen.harness === favorite.harness && chosen.model === favorite.model}
 						radio
 						disabled={!agent || Boolean(agent.blocked)}
@@ -715,6 +761,9 @@ function FavoritesPanel({
 					>
 						<ProviderMark provider={favorite.harness} className="mr-2 size-3.5" />
 						<span className="min-w-0 truncate">{favorite.label}</span>
+						{favorite.fast ? <Zap aria-label="Fast mode" className="ml-1.5 size-3 shrink-0 fill-current" /> : null}
+						{favorite.thinking ? <Brain aria-label="Thinking" className="ml-1.5 size-3 shrink-0" /> : null}
+						{favorite.effortLabel ? <span className="ml-1.5 shrink-0 text-muted-foreground">{favorite.effortLabel}</span> : null}
 						<FavoriteStar starred onToggle={() => toggleModelFavorite(favorite)} />
 					</OptionMenuItem>
 				);
