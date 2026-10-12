@@ -275,6 +275,7 @@ export function AgentModelPicker({
 	const shownEffort = pending
 		? pendingEffort ? formatEffortLabel(pendingEffort, t) : undefined
 		: currentSource.efforts.find((effort) => effort.value === currentSource.effort)?.label;
+	const shownUltra = isUltraEffort(pending ? pendingEffort : currentSource.effort);
 	const shownFast = pending ? pending.fast : currentSource.fast;
 	const shownThinking = pending ? pending.thinking : currentSource.thinking;
 
@@ -297,12 +298,16 @@ export function AgentModelPicker({
 				showCaret={!terminal}
 			>
 				<ProviderMark provider={terminal ? currentHarness : shownHarness} />
-				<span className="min-w-0 max-w-[28ch] truncate">{terminal ? agentLabel(currentHarness) : shownModel}</span>
+				<span className={cn("min-w-0 max-w-[28ch] truncate", shownUltra && !terminal ? "ultra-text" : undefined)}>
+					{terminal ? agentLabel(currentHarness) : shownModel}
+				</span>
 				{terminal ? <ChevronRight aria-hidden="true" className="ml-auto size-icon-sm shrink-0 text-muted-foreground" /> : (
 					<>
 						{shownFast ? <Zap aria-label="Fast mode" className="size-3 shrink-0 fill-current" /> : null}
 						{shownThinking ? <Brain aria-label="Thinking" className="size-3 shrink-0" /> : null}
-						{shownEffort ? <span className="shrink-0 text-muted-foreground">{shownEffort}</span> : null}
+						{shownEffort ? (
+							<span className={cn("shrink-0", shownUltra ? "ultra-text" : "text-muted-foreground")}>{shownEffort}</span>
+						) : null}
 						{mark}
 					</>
 				)}
@@ -544,7 +549,12 @@ function SourcePanel({
 	return (
 		<>
 			{source.models.length > 0 ? (
-				<ModelMenuChoices models={source.models} alwaysSearch divided>
+				<ModelMenuChoices
+					models={source.models}
+					alwaysSearch
+					noSearch={source.models.filter((model) => model.id).length <= 10}
+					divided
+				>
 					{(matches, searchActiveID, optionID) => matches.map((model, index) => {
 						const active = model.id === chosenId;
 						const key = model.id || "default";
@@ -593,6 +603,11 @@ function SourcePanel({
 // Half the thumb, so the thumb sits flush with either end of the track.
 const SLIDER_INSET = 12;
 
+/** The top level some agents have past Max: Codex's "ultra", Claude Code's "ultracode". */
+function isUltraEffort(value: string | undefined): boolean {
+	return Boolean(value?.toLowerCase().startsWith("ultra"));
+}
+
 /** Speed, effort and its reset, over a slider with one stop per level. */
 function EffortPanel({ source, beforeChange }: { source: PickerSource; beforeChange?: () => void }) {
 	const { efforts, effort, onPickEffort } = source;
@@ -639,6 +654,7 @@ function EffortPanel({ source, beforeChange }: { source: PickerSource; beforeCha
 		event.preventDefault();
 		commit(Math.min(efforts.length - 1, Math.max(0, (selected < 0 ? 0 : selected) + step)));
 	};
+	const ultra = index >= 0 && isUltraEffort(efforts[index]?.value);
 	const label = index >= 0 && efforts[index]
 		? efforts[index].label
 		: hasSlider ? "Effort" : source.fast ? "Fast" : "Standard";
@@ -671,7 +687,7 @@ function EffortPanel({ source, beforeChange }: { source: PickerSource; beforeCha
 				<span
 					className={cn(
 						"min-w-0 flex-1 truncate text-center text-xs font-medium",
-						index >= 0 ? "text-primary" : "text-muted-foreground",
+						ultra ? "ultra-text" : index >= 0 ? "text-primary" : "text-muted-foreground",
 					)}
 				>
 					{label}
@@ -715,7 +731,8 @@ function EffortPanel({ source, beforeChange }: { source: PickerSource; beforeCha
 							aria-hidden="true"
 							style={{ width: position(index) }}
 							className={cn(
-								"absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] ease-[cubic-bezier(0.22,1.1,0.36,1)]",
+								"absolute inset-y-0 left-0 rounded-full transition-[width] ease-[cubic-bezier(0.22,1.1,0.36,1)]",
+								ultra ? "ultra-fill" : "bg-primary",
 								dragIndex === undefined ? "duration-200" : "duration-75",
 							)}
 						/>

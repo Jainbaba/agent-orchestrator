@@ -7,19 +7,22 @@ import { cn } from "../../lib/utils";
 export function ModelMenuChoices<T extends { id: string; label: string }>({
 	models,
 	alwaysSearch = false,
+	noSearch = false,
 	divided = false,
 	children,
 }: {
 	models: T[];
 	/** Show the search field however short the list is. */
 	alwaysSearch?: boolean;
+	/** A short list is quicker to read than to search. */
+	noSearch?: boolean;
 	/** Rule off the search field from the list under it. */
 	divided?: boolean;
 	children: (models: T[], searchActiveID?: string, optionID?: (id: string) => string) => ReactNode;
 }) {
 	const { t } = useTranslation();
 	const [search, setSearch] = useState("");
-	const showSearch = alwaysSearch || models.length >= 10;
+	const showSearch = !noSearch && (alwaysSearch || models.length >= 10);
 	const query = showSearch ? search.trim() : "";
 	const normalizedQuery = query.toLocaleLowerCase();
 	const matches = useMemo(() => {
