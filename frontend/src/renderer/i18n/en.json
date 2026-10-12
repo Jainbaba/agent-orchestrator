@@ -2234,6 +2234,7 @@
 	"files.expandFile": "Expand {{file}}",
 	"files.loadingDiff": "Loading diff...",
 	"files.error.loadFile": "Unable to load this file.",
+	"files.error.outsideWorkspace": "This file is outside the session's workspace, so it can't be opened here.",
 	"files.noChangesHead": "No changes against HEAD.",
 	"files.noChangesBase": "No changes against base.",
 	"files.noneChanged": "No changed files found.",

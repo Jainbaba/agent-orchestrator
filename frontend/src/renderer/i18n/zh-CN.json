@@ -2053,6 +2053,7 @@
 	"files.expandFile": "展开 {{file}}",
 	"files.loadingDiff": "正在加载差异...",
 	"files.error.loadFile": "无法加载此文件。",
+	"files.error.outsideWorkspace": "此文件位于会话工作区之外，无法在此处打开。",
 	"files.noChangesHead": "与 HEAD 相比没有更改。",
 	"files.noChangesBase": "与基准相比没有更改。",
 	"files.noneChanged": "未找到已更改的文件。",

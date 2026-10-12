@@ -77,8 +77,8 @@ import { clientForSessionHost } from "../lib/host-clients";
 import { useHostConnection } from "../hooks/useHostConnection";
 import { sessionReviewsQueryKey } from "../lib/session-reviews";
 import { sessionUiKey } from "../lib/hosts";
-import { sessionWorkspaceFilesQueryOptions } from "../hooks/useSessionWorkspaceFiles";
-import { matchWorkspaceFilePath } from "../lib/workspace-file-path";
+import { resolveSessionWorkspacePath, sessionWorkspaceFilesQueryOptions } from "../hooks/useSessionWorkspaceFiles";
+import { isAbsoluteFileReference, matchWorkspaceFilePath } from "../lib/workspace-file-path";
 import { markFileViewerPerformance } from "../lib/file-viewer-performance";
 import { aoBridge } from "../lib/bridge";
 import {
@@ -1498,13 +1498,42 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 		);
 	}, [hostId, queryClient, sessionId, t]);
 
+	const handleOpenArtifact = useCallback(
+		(target: { feedback?: boolean; path: string }) => {
+			if (browserOnly) return;
+			prepareFilesInspector();
+			setFilePreviewRequestsBySession((current) => ({
+				...current,
+				[uiSessionId]: { feedback: target.feedback, path: target.path, key: (current[uiSessionId]?.key ?? 0) + 1, source: "artifact" },
+			}));
+		},
+		[browserOnly, prepareFilesInspector, uiSessionId],
+	);
+
 	const revealResolvedWorkspaceFile = useCallback(
 		async (rawPath: string, options?: FileOpenOptions) => {
 			const data = await fetchWorkspaceFiles();
 			const path = matchWorkspaceFilePath(rawPath, data.files ?? []);
+			if (!isAbsoluteFileReference(path)) {
+				openCenterFile(path, options);
+				return;
+			}
+			// The renderer is never told where a session's worktree lives, so the
+			// daemon decides which root an absolute path belongs to.
+			const resolved = await resolveSessionWorkspacePath(sessionId, path, hostId);
+			if (resolved?.kind === "workspace") {
+				openCenterFile(resolved.path, options);
+				return;
+			}
+			if (resolved?.kind === "artifact" && !browserOnly) {
+				handleOpenArtifact({ path: resolved.path });
+				return;
+			}
+			// Outside the session, or the daemon could not say: the file pane
+			// explains that instead of fetching a path the daemon will reject.
 			openCenterFile(path, options);
 		},
-		[openCenterFile, fetchWorkspaceFiles],
+		[browserOnly, fetchWorkspaceFiles, handleOpenArtifact, hostId, openCenterFile, sessionId],
 	);
 
 	// A reveal is one-shot. Left in place, it would reopen the file (and take
@@ -1545,17 +1574,6 @@ export function SessionView({ sessionId, cloudOrgId, projectId, hostId }: Sessio
 		[revealResolvedWorkspaceFile],
 	);
 
-	const handleOpenArtifact = useCallback(
-		(target: { feedback?: boolean; path: string }) => {
-			if (browserOnly) return;
-			prepareFilesInspector();
-			setFilePreviewRequestsBySession((current) => ({
-				...current,
-				[uiSessionId]: { feedback: target.feedback, path: target.path, key: (current[uiSessionId]?.key ?? 0) + 1, source: "artifact" },
-			}));
-		},
-		[browserOnly, prepareFilesInspector, uiSessionId],
-	);
 	const handleFilePreviewRequestConsumed = useCallback((key: number) => {
 		setFilePreviewRequestsBySession((current) => {
 			const request = current[uiSessionId];

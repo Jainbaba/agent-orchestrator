@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	explicitWorkspaceFilePath,
 	findWorkspaceFilePath,
+	isAbsoluteFileReference,
 	matchWorkspaceFilePath,
 	normalizeWorkspaceFileReference,
 	workspaceFileReferenceLine,
@@ -34,10 +35,23 @@ describe("matchWorkspaceFilePath", () => {
 		expect(matchWorkspaceFilePath("docs/report.md#L12-L18", files)).toBe("docs/report.md");
 	});
 
-	it("resolves encoded absolute file urls against workspace files", () => {
+	it("returns absolute references normalized for the daemon to resolve", () => {
 		expect(
 			matchWorkspaceFilePath("file:///Users/me/project/docs/report.md%3A42", files),
-		).toBe("docs/report.md");
+		).toBe("/Users/me/project/docs/report.md");
+	});
+
+	it("does not match an outside absolute path by suffix or basename", () => {
+		expect(matchWorkspaceFilePath("/Users/me/other-repo/src/a.ts:12", files)).toBe("/Users/me/other-repo/src/a.ts");
+		expect(matchWorkspaceFilePath("~/elsewhere/a.ts", files)).toBe("~/elsewhere/a.ts");
+	});
+
+	it("recognizes absolute file references", () => {
+		expect(isAbsoluteFileReference("/Users/me/repo/src/app.ts")).toBe(true);
+		expect(isAbsoluteFileReference("~/notes/plan.md")).toBe(true);
+		expect(isAbsoluteFileReference("C:/repo/src/app.ts")).toBe(true);
+		expect(isAbsoluteFileReference("src/app.ts")).toBe(false);
+		expect(isAbsoluteFileReference("./src/app.ts")).toBe(false);
 	});
 
 	it("falls back to the normalized request when nothing matches", () => {

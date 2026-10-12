@@ -1987,6 +1987,7 @@
 	"files.expandFile": "{{file}} を展開",
 	"files.loadingDiff": "diff を読み込み中...",
 	"files.error.loadFile": "このファイルを読み込めません。",
+	"files.error.outsideWorkspace": "このファイルはセッションのワークスペース外にあるため、ここでは開けません。",
 	"files.noChangesHead": "HEAD に対する変更はありません。",
 	"files.noChangesBase": "ベースに対する変更はありません。",
 	"files.noneChanged": "変更されたファイルは見つかりませんでした。",

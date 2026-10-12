@@ -2019,6 +2019,7 @@
 	"files.expandFile": "Expandir {{file}}",
 	"files.loadingDiff": "Cargando diff...",
 	"files.error.loadFile": "No se pudo cargar este archivo.",
+	"files.error.outsideWorkspace": "Este archivo está fuera del espacio de trabajo de la sesión, así que no se puede abrir aquí.",
 	"files.noChangesHead": "Sin cambios respecto a HEAD.",
 	"files.noChangesBase": "Sin cambios respecto a la base.",
 	"files.noneChanged": "No se encontraron archivos modificados.",

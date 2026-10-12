@@ -95,10 +95,16 @@ export function explicitWorkspaceFilePath(reference: string): string | undefined
 	return undefined;
 }
 
+/** True for a normalized reference that names a location by absolute path. */
+export function isAbsoluteFileReference(path: string): boolean {
+	return path.startsWith("/") || path === "~" || path.startsWith("~/") || /^[A-Za-z]:\//.test(path);
+}
+
 /**
  * Map a chat/turn path onto the workspace-relative path the Files API expects.
- * Turn diffs often carry basenames or absolute worktree paths; the workspace
- * file list carries repo-relative paths.
+ * Turn diffs often carry basenames; the workspace file list carries
+ * repo-relative paths. Absolute paths are returned normalized for the caller
+ * to resolve through the daemon.
  */
 export function matchWorkspaceFilePath(
 	rawPath: string,
@@ -109,6 +115,11 @@ export function matchWorkspaceFilePath(
 
 	const exact = files.find((file) => normalizeWorkspacePath(file.path) === normalized);
 	if (exact) return exact.path;
+
+	// An absolute path says exactly where the file is. Guessing from its tail
+	// would open a same-named workspace file for a path in another checkout, so
+	// the caller resolves it against the session's real roots instead.
+	if (isAbsoluteFileReference(normalized)) return normalized;
 
 	const suffix = files.find((file) => {
 		const candidate = normalizeWorkspacePath(file.path);
