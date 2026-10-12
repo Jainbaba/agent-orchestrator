@@ -96,3 +96,31 @@ func (s *Store) MarkTUIProviderSwitchOwner(ctx context.Context, id domain.Sessio
 	})
 	return rows > 0, err
 }
+
+// SessionLaunchOptions returns the launch choices saved for a terminal session.
+func (s *Store) SessionLaunchOptions(ctx context.Context, id domain.SessionID) (domain.AgentLaunchOptions, error) {
+	raw, err := s.qr.GetSessionLaunchOptions(ctx, id)
+	if err != nil || raw == "" {
+		return domain.AgentLaunchOptions{}, err
+	}
+	var options domain.AgentLaunchOptions
+	if err := json.Unmarshal([]byte(raw), &options); err != nil {
+		return domain.AgentLaunchOptions{}, fmt.Errorf("decode launch options for %s: %w", id, err)
+	}
+	return options, nil
+}
+
+// SetSessionLaunchOptions saves the launch choices for a terminal session.
+func (s *Store) SetSessionLaunchOptions(ctx context.Context, id domain.SessionID, options domain.AgentLaunchOptions) error {
+	raw := ""
+	if options != (domain.AgentLaunchOptions{}) {
+		encoded, err := json.Marshal(options)
+		if err != nil {
+			return err
+		}
+		raw = string(encoded)
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return s.qw.SetSessionLaunchOptions(ctx, gen.SetSessionLaunchOptionsParams{LaunchOptions: raw, ID: id})
+}

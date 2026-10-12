@@ -64,6 +64,10 @@ type ProviderSwitchRequest struct {
 	Effort string
 	// FastMode starts the target on its faster tier, where its model has one.
 	FastMode bool
+	// Ultracode and AutoCompactWindow are Claude Code launch choices for a
+	// terminal target. See AgentLaunchOptions.
+	Ultracode         bool
+	AutoCompactWindow string
 	// HandoffNote is the note the target provider starts with. The switch
 	// front door builds it; it is never accepted from a client.
 	HandoffNote string

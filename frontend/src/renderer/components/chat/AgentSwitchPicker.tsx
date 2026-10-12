@@ -63,6 +63,10 @@ export interface PendingAgentSwitch {
 	shownEffort?: string;
 	fast?: boolean;
 	thinking?: boolean;
+	/** Terminal only: start Claude Code with Ultracode on. */
+	ultracode?: boolean;
+	/** Terminal only: where Claude Code compacts on its own, "200k" or "1m". */
+	autoCompactWindow?: string;
 }
 
 /** What the chat surface passes down to turn the model control into this one. */
@@ -264,6 +268,8 @@ export function AgentModelPicker({
 	})();
 
 	const shownHarness = pending?.harness ?? currentHarness;
+	const extraRows = (pendingFooter && pending?.harness === tab ? 1 : 0) +
+		((extras && tab === currentHarness) || (terminal && tab === "claude-code" && tab !== currentHarness) ? 1 : 0);
 	const shownModel = pending ? pending.modelLabel ?? agentLabel(pending.harness) : currentSource.modelLabel;
 	const pendingEffort = pending?.effort ?? pending?.shownEffort;
 	const shownEffort = pending
@@ -303,7 +309,8 @@ export function AgentModelPicker({
 			</OptionMenuTrigger>
 			<OptionMenuContent align="start" alignOffset={shift} side={terminal ? "right" : "top"}
 				// A footer bar or extra row adds its own height; it must not squeeze the model list.
-				className={cn(MENU_CLASS, (pendingFooter && pending?.harness === tab) || (extras && tab === currentHarness) ? "max-h-[calc(var(--size-select-menu-max)+2.85rem)]!" : undefined)}
+				className={MENU_CLASS}
+				style={extraRows > 0 ? { maxHeight: `calc(var(--size-select-menu-max) + ${extraRows * 2.85}rem)` } : undefined}
 			>
 				<AgentTabStrip>
 					{agents.map((agent) => (
@@ -350,7 +357,7 @@ export function AgentModelPicker({
 						hostId={hostId}
 						pending={pending?.harness === tab ? pending : undefined}
 						onPick={onPendingChange}
-						allowFast={!terminal}
+						terminal={terminal}
 					/>
 				)}
 				{pending?.harness === tab ? pendingFooter : null}
@@ -415,15 +422,19 @@ function OtherAgentPanel({
 	hostId,
 	pending,
 	onPick,
-	allowFast,
+	terminal,
 }: {
 	harness: string;
 	projectId: string;
 	hostId?: string;
 	pending?: PendingAgentSwitch;
 	onPick: (next: PendingAgentSwitch) => void;
-	/** A terminal agent is started without a speed setting. */
-	allowFast: boolean;
+	/**
+	 * A terminal agent takes these when it is launched, so Claude Code's
+	 * Ultracode and auto-compact are offered here; in chat they are set on the
+	 * running agent instead.
+	 */
+	terminal: boolean;
 }) {
 	const { t } = useTranslation();
 	const query = useQuery(agentModelsQueryOptions(harness, projectId, hostId));
@@ -450,8 +461,12 @@ function OtherAgentPanel({
 		// Effort levels belong to a model. With none picked they are the default's.
 		const effortSource = catalog?.find((model) => (chosen ? model.id === chosen : model.isDefault)) ?? catalog?.[0];
 		const defaultEffort = effortSource?.defaultEffort;
-		const offersFast = allowFast && Boolean(effortSource?.supportsFast);
+		const offersFast = Boolean(effortSource?.supportsFast);
 		const fastOn = offersFast && Boolean(pending?.fastMode);
+		const levels = (effortSource?.efforts ?? []).filter((value) => value && value.toLowerCase() !== "default");
+		// Ultracode runs at Extra High, so it is only for models that have that level.
+		const offersUltracode = terminal && harness === "claude-code" && levels.includes("xhigh");
+		const ultracodeOn = offersUltracode && Boolean(pending?.ultracode);
 		const keep = {
 			harness,
 			model: pending?.model,
@@ -459,6 +474,7 @@ function OtherAgentPanel({
 			shownEffort: defaultEffort,
 			fast: fastOn || undefined,
 			fastMode: fastOn || undefined,
+			autoCompactWindow: pending?.autoCompactWindow,
 		};
 		return {
 			models: [{ id: "", label: "Default model" }, ...listed],
@@ -467,7 +483,7 @@ function OtherAgentPanel({
 			onPickModel: (id) => {
 				// Fast mode carries over only to a model that also offers it.
 				const next = catalog?.find((model) => (id ? model.id === id : model.isDefault));
-				const fast = (allowFast && Boolean(next?.supportsFast && pending?.fastMode)) || undefined;
+				const fast = Boolean(next?.supportsFast && pending?.fastMode) || undefined;
 				onPick({
 					harness,
 					model: id || undefined,
@@ -475,20 +491,41 @@ function OtherAgentPanel({
 					shownEffort: next?.defaultEffort,
 					fast,
 					fastMode: fast,
+					autoCompactWindow: pending?.autoCompactWindow,
 				});
 			},
-			efforts: (effortSource?.efforts ?? [])
-				.filter((value) => value && value.toLowerCase() !== "default")
-				.map((value) => ({ value, label: formatEffortLabel(value, t) })),
-			effort: pending?.effort ?? defaultEffort,
-			onPickEffort: (effort) => onPick({ ...keep, effort }),
-			onResetEffort: pending?.effort && pending.effort !== defaultEffort ? () => onPick(keep) : undefined,
+			efforts: [
+				...levels.map((value) => ({ value, label: formatEffortLabel(value, t) })),
+				...(offersUltracode ? [{ value: "ultracode", label: "Ultracode" }] : []),
+			],
+			effort: ultracodeOn ? "ultracode" : pending?.effort ?? defaultEffort,
+			onPickEffort: (effort) => onPick(effort === "ultracode"
+				? { ...keep, effort: "xhigh", ultracode: true }
+				: { ...keep, effort }),
+			onResetEffort: ultracodeOn || (pending?.effort && pending.effort !== defaultEffort) ? () => onPick(keep) : undefined,
 			fast: offersFast ? fastOn : undefined,
-			onToggleFast: (fast) => onPick({ ...keep, effort: pending?.effort, fast: fast || undefined, fastMode: fast || undefined }),
+			onToggleFast: (fast) => onPick({ ...keep, effort: pending?.effort, ultracode: pending?.ultracode, fast: fast || undefined, fastMode: fast || undefined }),
 		};
-	}, [allowFast, catalog, harness, onPick, pending, t]);
+	}, [catalog, harness, onPick, pending, t, terminal]);
 
-	return <SourcePanel source={source} chosenId={source.modelId} emptyLabel={agentLabel(harness)} />;
+	// Claude Code only compacts early on its larger-window models.
+	const offersAutoCompact = terminal && harness === "claude-code" && !/haiku|opus-4-5/.test(pending?.model ?? "");
+	return (
+		<>
+			<SourcePanel source={source} chosenId={source.modelId} emptyLabel={agentLabel(harness)} />
+			{offersAutoCompact ? (
+				<div className="mt-1 border-t border-border pt-1">
+					<AutoCompactRow
+						control={{
+							value: pending?.autoCompactWindow,
+							onChange: (value) => onPick({ ...(pending ?? { harness }), autoCompactWindow: value }),
+						}}
+						title="When Claude Code compacts the conversation on its own."
+					/>
+				</div>
+			) : null}
+		</>
+	);
 }
 
 /** Search, the model list and the settings under it, for one agent. */
@@ -809,6 +846,47 @@ export function ComposerErrorNotice({
 					<X aria-hidden="true" className="size-3.5" />
 				</button>
 			) : null}
+		</div>
+	);
+}
+
+export interface AutoCompactControl {
+	/** "200k", "1m", or unset to leave it to Claude Code. */
+	value?: string;
+	/** The agent is working or already restarting. */
+	disabled?: boolean;
+	onChange: (value: string | undefined) => void;
+}
+
+const AUTO_COMPACT_CHOICES = [
+	{ value: undefined, label: "Auto" },
+	{ value: "200k", label: "200k" },
+	{ value: "1m", label: "1M" },
+] as const;
+
+/** One row under the effort slider: where Claude Code compacts on its own. */
+export function AutoCompactRow({ control, title }: { control: AutoCompactControl; title: string }) {
+	return (
+		<div className="flex h-9 items-center gap-2 px-3 text-xs" title={title}>
+			<span className="text-muted-foreground">Auto-compact</span>
+			<span role="radiogroup" aria-label="Auto-compact" className="ml-auto flex rounded-md bg-interactive-active p-0.5">
+				{AUTO_COMPACT_CHOICES.map((choice) => (
+					<button
+						key={choice.label}
+						type="button"
+						role="radio"
+						aria-checked={control.value === choice.value}
+						disabled={control.disabled || control.value === choice.value}
+						onClick={() => control.onChange(choice.value)}
+						className={cn(
+							"rounded px-2 py-0.5 disabled:cursor-default",
+							control.value === choice.value ? "bg-settings-menu text-foreground" : "text-muted-foreground hover:text-foreground",
+						)}
+					>
+						{choice.label}
+					</button>
+				))}
+			</span>
 		</div>
 	);
 }

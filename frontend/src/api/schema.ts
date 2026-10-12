@@ -4545,11 +4545,14 @@ export interface components {
             supported: boolean;
         };
         ProviderSwitchRequest: {
+            /** @enum {string} */
+            autoCompactWindow?: "200k" | "1m";
             effort?: string;
             fastMode?: boolean;
             idempotencyKey?: string;
             model?: string;
             targetHarness: string;
+            ultracode?: boolean;
         };
         ProviderSwitchResponse: {
             branchId: string;

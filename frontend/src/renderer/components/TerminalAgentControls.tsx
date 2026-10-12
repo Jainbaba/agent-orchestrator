@@ -56,7 +56,10 @@ export function TerminalSessionMenu({
 	if (!switchAction && switchControl) return <div className="inline-flex shrink-0 items-center">{switchControl}</div>;
 	const switchNow = () => {
 		if (!pending) return;
-		void commands.switchProvider(pending.harness, pending.model, pending.effort)
+		void commands.switchProvider(pending.harness, pending.model, pending.effort, pending.fastMode, {
+			ultracode: pending.ultracode,
+			autoCompactWindow: pending.autoCompactWindow,
+		})
 			.then(() => { setPending(undefined); setOpen(false); })
 			.catch((error) => showGlobalToast("Agent switch failed", apiErrorMessage(error), "error"));
 	};

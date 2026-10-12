@@ -205,7 +205,14 @@ func (m *Manager) SwitchTUIProvider(
 
 	// From here the source is stopped. Any failure brings it back on its old
 	// native thread, so the user is never left with a blank terminal.
+	// The target's launch choices replace the source's. They are saved before
+	// the target starts, and put back if the source has to be restored.
+	launchStore, _ := m.store.(launchOptionsStore)
+	sourceLaunch := m.sessionLaunchOptions(ctx, id)
 	restoreSource := func(cause error, what string) (TUIProviderSwitchResult, error) {
+		if launchStore != nil {
+			_ = launchStore.SetSessionLaunchOptions(context.WithoutCancel(ctx), id, sourceLaunch)
+		}
 		if restoreErr := m.restoreTUIProvider(ctx, source, project, ws); restoreErr != nil {
 			joined := errors.Join(cause, restoreErr)
 			_ = advance("recovery_required", joined.Error())
@@ -236,6 +243,14 @@ func (m *Manager) SwitchTUIProvider(
 	targetRecord.UpdatedAt = m.clock()
 	if err := m.store.UpdateSession(ctx, targetRecord); err != nil {
 		return restoreSource(err, "could not publish target provider ownership")
+	}
+	if launchStore != nil {
+		targetLaunch := domain.AgentLaunchOptions{
+			FastMode: request.FastMode, Ultracode: request.Ultracode, AutoCompactWindow: request.AutoCompactWindow,
+		}
+		if err := launchStore.SetSessionLaunchOptions(ctx, id, targetLaunch); err != nil {
+			return restoreSource(err, "could not save the target's launch options")
+		}
 	}
 	_ = advance("target_starting", "")
 

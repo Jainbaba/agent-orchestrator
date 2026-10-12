@@ -575,6 +575,7 @@ type Session struct {
 	ClientRequestCommitted           bool
 	CodexActivityFacts               string
 	ClaudeActivityFacts              string
+	LaunchOptions                    string
 }
 
 type SessionCleanupFact struct {

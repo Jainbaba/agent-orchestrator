@@ -2332,6 +2332,10 @@ type ProviderSwitchRequest struct {
 	Effort string `json:"effort,omitempty" maxLength:"64"`
 	// FastMode starts the target on its faster tier, where its model has one.
 	FastMode bool `json:"fastMode,omitempty"`
+	// Ultracode starts a Claude Code terminal target with Ultracode on.
+	Ultracode bool `json:"ultracode,omitempty"`
+	// AutoCompactWindow is where a Claude Code terminal target compacts on its own.
+	AutoCompactWindow string `json:"autoCompactWindow,omitempty" enum:"200k,1m"`
 }
 
 // ProviderSwitchResponse returns only the published provider identities; the

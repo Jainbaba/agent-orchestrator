@@ -13231,6 +13231,11 @@ components:
       type: object
     ProviderSwitchRequest:
       properties:
+        autoCompactWindow:
+          enum:
+          - 200k
+          - 1m
+          type: string
         effort:
           maxLength: 64
           type: string
@@ -13243,6 +13248,8 @@ components:
           type: string
         targetHarness:
           type: string
+        ultracode:
+          type: boolean
       required:
       - targetHarness
       type: object

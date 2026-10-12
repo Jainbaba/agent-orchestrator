@@ -133,6 +133,7 @@ func (p *Plugin) GetLaunchCommand(ctx context.Context, cfg ports.LaunchConfig) (
 	}
 	appendTerminalCompatibilityFlags(&providerArgs)
 	appendReasoningEffortFlag(&providerArgs, cfg.Config.Effort)
+	appendFastTierFlag(&providerArgs, cfg.Config.Launch.FastMode)
 	return agentruntime.BuildLaunchCommand(agentruntime.LaunchConfig{
 		Harness:          agentruntime.HarnessCodex,
 		Binary:           binary,
@@ -172,6 +173,7 @@ func (p *Plugin) GetRestoreCommand(ctx context.Context, cfg ports.RestoreConfig)
 	}
 	appendTerminalCompatibilityFlags(&providerArgs)
 	appendReasoningEffortFlag(&providerArgs, cfg.Config.Effort)
+	appendFastTierFlag(&providerArgs, cfg.Config.Launch.FastMode)
 	return agentruntime.BuildRestoreCommand(agentruntime.RestoreConfig{
 		Harness:          agentruntime.HarnessCodex,
 		Binary:           binary,
@@ -185,6 +187,14 @@ func (p *Plugin) GetRestoreCommand(ctx context.Context, cfg ports.RestoreConfig)
 		Permission:       agentruntime.PermissionPolicy(cfg.Permissions),
 		ProviderArgs:     providerArgs,
 	})
+}
+
+// appendFastTierFlag starts Codex on its faster service tier. "priority" is the
+// tier's id in Codex's own model list and session records.
+func appendFastTierFlag(args *[]string, fast bool) {
+	if fast {
+		*args = append(*args, "-c", "service_tier="+codexTOMLConfigString("priority"))
+	}
 }
 
 func appendReasoningEffortFlag(args *[]string, effort string) {

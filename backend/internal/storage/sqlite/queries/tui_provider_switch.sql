@@ -33,3 +33,9 @@ UPDATE sessions SET harness=sqlc.arg(target_harness),
 WHERE id=sqlc.arg(id) AND harness=sqlc.arg(source_harness)
     AND runtime_launch_id=sqlc.arg(source_launch_id) AND session_mode='tui'
     AND is_terminated=0;
+
+-- name: GetSessionLaunchOptions :one
+SELECT launch_options FROM sessions WHERE id = ?;
+
+-- name: SetSessionLaunchOptions :exec
+UPDATE sessions SET launch_options = ? WHERE id = ?;

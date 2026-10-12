@@ -87,6 +87,17 @@ func (q *Queries) ChangeTUIProviderOwner(ctx context.Context, arg ChangeTUIProvi
 	return result.RowsAffected()
 }
 
+const getSessionLaunchOptions = `-- name: GetSessionLaunchOptions :one
+SELECT launch_options FROM sessions WHERE id = ?
+`
+
+func (q *Queries) GetSessionLaunchOptions(ctx context.Context, id domain.SessionID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSessionLaunchOptions, id)
+	var launch_options string
+	err := row.Scan(&launch_options)
+	return launch_options, err
+}
+
 const getTUIProviderSwitch = `-- name: GetTUIProviderSwitch :one
 SELECT record_json FROM tui_provider_switches WHERE session_id=? AND request_id=?
 `
@@ -149,6 +160,20 @@ func (q *Queries) LatestTUIProviderSwitch(ctx context.Context, sessionID string)
 	var record_json string
 	err := row.Scan(&record_json)
 	return record_json, err
+}
+
+const setSessionLaunchOptions = `-- name: SetSessionLaunchOptions :exec
+UPDATE sessions SET launch_options = ? WHERE id = ?
+`
+
+type SetSessionLaunchOptionsParams struct {
+	LaunchOptions string
+	ID            domain.SessionID
+}
+
+func (q *Queries) SetSessionLaunchOptions(ctx context.Context, arg SetSessionLaunchOptionsParams) error {
+	_, err := q.db.ExecContext(ctx, setSessionLaunchOptions, arg.LaunchOptions, arg.ID)
+	return err
 }
 
 const updateTUIProviderSwitch = `-- name: UpdateTUIProviderSwitch :execrows

@@ -1915,6 +1915,28 @@ func effectiveAgentConfig(harness domain.AgentHarness, kind domain.SessionKind, 
 	return merged
 }
 
+// launchOptionsStore is the part of a store that keeps a terminal session's
+// launch choices. It is optional so stores without it launch with none.
+type launchOptionsStore interface {
+	SessionLaunchOptions(ctx context.Context, id domain.SessionID) (domain.AgentLaunchOptions, error)
+	SetSessionLaunchOptions(ctx context.Context, id domain.SessionID, options domain.AgentLaunchOptions) error
+}
+
+// sessionLaunchOptions reads the session's saved launch choices. A failed read
+// launches the agent without them, which is its plain default.
+func (m *Manager) sessionLaunchOptions(ctx context.Context, id domain.SessionID) domain.AgentLaunchOptions {
+	store, ok := m.store.(launchOptionsStore)
+	if !ok {
+		return domain.AgentLaunchOptions{}
+	}
+	options, err := store.SessionLaunchOptions(ctx, id)
+	if err != nil {
+		m.logger.Warn("read session launch options", "session", id, "error", err)
+		return domain.AgentLaunchOptions{}
+	}
+	return options
+}
+
 func restoredAgentConfig(rec domain.SessionRecord, cfg domain.ProjectConfig) ports.AgentConfig {
 	merged := effectiveAgentConfig(rec.Harness, rec.Kind, cfg)
 	if rec.Harness == domain.HarnessClaudeCode {
@@ -2866,6 +2888,7 @@ func (m *Manager) relaunchSessionWithPolicyAndGenerationPrompt(ctx context.Conte
 	if effort := strings.TrimSpace(rec.Metadata.Effort); effort != "" {
 		agentConfig.Effort = effort
 	}
+	agentConfig.Launch = m.sessionLaunchOptions(ctx, rec.ID)
 	if rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}

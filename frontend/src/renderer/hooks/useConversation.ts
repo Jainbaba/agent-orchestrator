@@ -417,18 +417,25 @@ export function useConversation(sessionId: string | undefined, hostId?: string):
 export function useProviderSwitchCommand(sessionId: string | undefined, hostId?: string) {
 	const queryClient = useQueryClient();
 	const switchProvider = useMutation({
-		mutationFn: async ({ targetHarness, model, effort, fastMode }: {
+		mutationFn: async ({ targetHarness, model, effort, fastMode, ultracode, autoCompactWindow }: {
 			targetHarness: string;
 			model?: string;
 			effort?: string;
 			fastMode?: boolean;
+			/** Terminal targets only: Claude Code launch choices. */
+			ultracode?: boolean;
+			autoCompactWindow?: string;
 		}) => {
 			if (!sessionId) throw new Error("No session is selected.");
 			const { data, error } = await clientForSessionHost(hostId).POST(
 				"/api/v1/sessions/{sessionId}/provider-switch",
 				{
 					params: { path: { sessionId } },
-					body: { targetHarness, model, effort, fastMode, idempotencyKey: crypto.randomUUID() },
+					body: {
+						targetHarness, model, effort, fastMode, ultracode,
+						autoCompactWindow: autoCompactWindow as "200k" | "1m" | undefined,
+						idempotencyKey: crypto.randomUUID(),
+					},
 				},
 			);
 			if (error) throw error;
@@ -446,8 +453,13 @@ export function useProviderSwitchCommand(sessionId: string | undefined, hostId?:
 		},
 	});
 	return {
-		switchProvider: (targetHarness: string, model?: string, effort?: string, fastMode?: boolean) =>
-			switchProvider.mutateAsync({ targetHarness, model, effort, fastMode }),
+		switchProvider: (
+			targetHarness: string,
+			model?: string,
+			effort?: string,
+			fastMode?: boolean,
+			launch?: { ultracode?: boolean; autoCompactWindow?: string },
+		) => switchProvider.mutateAsync({ targetHarness, model, effort, fastMode, ...launch }),
 		switchProviderPending: switchProvider.isPending,
 		switchProviderError: switchProvider.error ? apiErrorMessage(switchProvider.error) : undefined,
 		resetSwitchProviderError: switchProvider.reset,

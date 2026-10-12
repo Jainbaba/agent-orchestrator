@@ -36,7 +36,15 @@ import { effortDisplayLabel, EffortMenuItems, EffortPicker, formatEffortLabel } 
 import { agentModelDisplayLabel, isDefaultPlaceholderLabel } from "../../lib/agent-model-choices";
 import { Switch } from "../ui/switch";
 import { agentLabel } from "../../lib/agent-options";
-import { AgentModelPicker, type AgentSwitchProps, type CurrentAgentChoices } from "./AgentSwitchPicker";
+import {
+	AgentModelPicker,
+	AutoCompactRow,
+	type AgentSwitchProps,
+	type AutoCompactControl,
+	type CurrentAgentChoices,
+} from "./AgentSwitchPicker";
+
+export type { AutoCompactControl };
 import { ModelMenuChoices } from "./ModelMenuChoices";
 import type {
 	ApprovalMode,
@@ -379,7 +387,12 @@ export function TurnSettingsBar({
 	);
 	const pickerExtras = hasPickerExtras ? (
 		<>
-			{offersAutoCompact && autoCompact ? <AutoCompactRow control={autoCompact} /> : null}
+			{offersAutoCompact && autoCompact ? (
+				<AutoCompactRow
+					control={autoCompact}
+					title="When Claude Code compacts the conversation on its own. Changing it restarts the agent; the conversation is kept."
+				/>
+			) : null}
 			{nativeModelMenu ? null : grouped.model.slice(1).map((option) => (
 				<OptionSubmenu key={option.id} option={option} onChange={applyOption} scrollable />
 			))}
@@ -1228,50 +1241,6 @@ export interface UltracodeControl {
 /** Claude Code turns Ultracode on for a turn when the user's message names it. */
 export function withUltracode(text: string): string {
 	return /\bultracode\b/i.test(text) ? text : `Ultracode:\n${text}`;
-}
-
-export interface AutoCompactControl {
-	/** "200k", "1m", or unset to leave it to Claude Code. */
-	value?: string;
-	/** The agent is working or already restarting. */
-	disabled?: boolean;
-	onChange: (value: string | undefined) => void;
-}
-
-const AUTO_COMPACT_CHOICES = [
-	{ value: undefined, label: "Auto" },
-	{ value: "200k", label: "200k" },
-	{ value: "1m", label: "1M" },
-] as const;
-
-/** One row under the effort slider: where Claude Code compacts on its own. */
-function AutoCompactRow({ control }: { control: AutoCompactControl }) {
-	return (
-		<div
-			className="flex h-9 items-center gap-2 px-3 text-xs"
-			title="When Claude Code compacts the conversation on its own. Changing it restarts the agent; the conversation is kept."
-		>
-			<span className="text-muted-foreground">Auto-compact</span>
-			<span role="radiogroup" aria-label="Auto-compact" className="ml-auto flex rounded-md bg-interactive-active p-0.5">
-				{AUTO_COMPACT_CHOICES.map((choice) => (
-					<button
-						key={choice.label}
-						type="button"
-						role="radio"
-						aria-checked={control.value === choice.value}
-						disabled={control.disabled || control.value === choice.value}
-						onClick={() => control.onChange(choice.value)}
-						className={cn(
-							"rounded px-2 py-0.5 disabled:cursor-default",
-							control.value === choice.value ? "bg-settings-menu text-foreground" : "text-muted-foreground hover:text-foreground",
-						)}
-					>
-						{choice.label}
-					</button>
-				))}
-			</span>
-		</div>
-	);
 }
 
 export function ComposerModeItems({

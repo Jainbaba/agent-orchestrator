@@ -35,7 +35,7 @@ func (c *ConversationsController) switchProvider(w http.ResponseWriter, r *http.
 		TargetHarness: domain.AgentHarness(req.TargetHarness), IdempotencyKey: req.IdempotencyKey,
 		Model:    capActivityMeta(strings.TrimSpace(domain.SanitizeControlChars(req.Model))),
 		Effort:   capActivityMeta(strings.TrimSpace(domain.SanitizeControlChars(req.Effort))),
-		FastMode: req.FastMode,
+		FastMode: req.FastMode, Ultracode: req.Ultracode, AutoCompactWindow: req.AutoCompactWindow,
 	})
 	if err != nil {
 		writeProviderSwitchError(w, r, err)
