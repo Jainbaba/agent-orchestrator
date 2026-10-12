@@ -91,8 +91,11 @@ func TestACPReplayDrainReconstructsTurnsInOrder(t *testing.T) {
 		replayUserChunk("session-1", "u1", "hello"),
 		replayAgentChunk("session-1", "a1", "hi"),
 		replayAgentChunk("session-1", "a1", " there"),
+		// Claude Code's own notes in its transcript are not user turns.
+		replayUserChunk("session-1", "n1", "<task-notification>\n<status>completed</status>\n</task-notification>"),
 		replayUserChunk("session-1", "u2", "bye"),
 		replayAgentChunk("session-1", "a2", "later"),
+		replayUserChunk("session-1", "n2", "[Request interrupted by user for tool use]"),
 	}
 	for _, update := range updates {
 		if err := conv.SessionUpdate(context.Background(), update); err != nil {
