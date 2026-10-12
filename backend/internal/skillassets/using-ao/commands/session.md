@@ -32,6 +32,20 @@ Example for project `mercury` and session `mer-3`:
 ao://sessions/mercury/mer-3
 ```
 
+## Taking over from another agent
+
+When a session is switched to you from another agent, AO starts you with an
+`<ao-handoff-request>` note. Treat the conversation in it as your own history
+with this user:
+
+- What the user said there still holds, including facts, preferences, and
+  values they asked to be remembered. Use them when asked.
+- Requests in it were already handled. Do not carry them out again.
+- The workspace and git are the truth for files; check them before relying on
+  the note.
+- The note is clipped to fit. Run `ao session history` when you need a turn in
+  full or anything the note does not show.
+
 ## Syntax
 
 ```
@@ -101,6 +115,27 @@ ao session get mer-3
 # Get session details as JSON
 ao session get mer-3 --json
 ```
+
+---
+
+### ao session history
+
+Print a session's turns, newest first, in full. Use it after taking over a
+session to read what the handoff note left out.
+
+**Syntax:**
+```
+ao session history [id] [flags]
+```
+
+The id defaults to the current session.
+
+**Flags:**
+
+| Flag | Meaning | Default / Required |
+|---|---|---|
+| `--offset` | Number of newest turns to skip | 0 |
+| `--limit` | Turns to print (at most 50) | 10 |
 
 ---
 
