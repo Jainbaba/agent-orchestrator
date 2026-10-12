@@ -611,6 +611,7 @@ func Run() error {
 	if err := accounts.Sync(ctx); err != nil { // sessions restored below need their routes in the helper
 		log.Warn("managed account helper requires attention", "error", err)
 	}
+	replayMissedHooks(ctx, cfg.DataDir, store, lcStack.LCM.ApplyActivitySignal)
 	go accounts.Run(ctx, log, sessMgr.MigrateLegacySessions)
 	projectSvc := projectsvc.NewWithDeps(projectsvc.Deps{Store: store, Sessions: sessionSvc, DefaultHarness: domain.AgentHarness(cfg.Agent), Telemetry: telemetrySink, Logger: log, OnModelScopeChanged: agentSvc.InvalidateProjectModelCatalogs})
 	reportSessions, ok := sessMgr.(reportSemanticSession)
