@@ -490,5 +490,7 @@ func (m *Manager) terminalHandoffNote(ctx context.Context, rec domain.SessionRec
 		OriginalTask:  rec.Metadata.Prompt,
 		Turns:         turns,
 		Terminal:      true,
+		// `ao session history` reads terminal turns too.
+		HistoryCommand: true,
 	})
 }

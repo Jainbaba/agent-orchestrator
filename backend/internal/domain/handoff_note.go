@@ -187,12 +187,17 @@ func renderHandoffNote(in HandoffNoteInput, older, previous []HandoffTurn, lates
 		fmt.Fprintf(&b, "\n## Latest turn\nUser:\n%s\n%s:\n%s\n", user, handoffAssistantLabel(*latest), agent)
 	}
 
-	if omitted > 0 {
+	// The full record is always one command away, so the note says so even
+	// when nothing was left out: long turns are clipped to fit the budget.
+	if omitted > 0 || in.HistoryCommand {
 		b.WriteString("\n## Earlier history\n")
+		if omitted > 0 {
+			fmt.Fprintf(&b, "%d earlier turns are not shown. ", omitted)
+		}
 		if in.HistoryCommand {
-			fmt.Fprintf(&b, "%d earlier turns are not shown. Run `ao session history` to read them, only if you really need something that isn't here.\n", omitted)
+			b.WriteString("Run `ao session history` to read the conversation in full when you need something this note does not show.\n")
 		} else {
-			fmt.Fprintf(&b, "%d earlier turns are not shown and are not available to you.\n", omitted)
+			b.WriteString("They are not available to you.\n")
 		}
 	}
 
