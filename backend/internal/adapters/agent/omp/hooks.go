@@ -161,7 +161,35 @@ function isRootSession(ctx: any): boolean {
   return ctx.hasUI === true;
 }
 
+// The run's final assistant text, read defensively: the event shape belongs to
+// the agent, and a missing or different field must only mean "no text".
+function finalAssistantText(event) {
+  try {
+    const messages = Array.isArray(event?.messages) ? event.messages : [];
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index];
+      if (message?.role !== "assistant") continue;
+      const content = message.content;
+      const text = typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content
+              .filter((part) => part?.type === "text" && typeof part.text === "string")
+              .map((part) => part.text)
+              .join("\n")
+          : "";
+      if (text.trim()) return text;
+    }
+  } catch {
+    // An unreadable event carries no text.
+  }
+  return "";
+}
+
 export default function (omp: ExtensionAPI) {
+  // The final message of the current run, kept across continuations until
+  // the run really stops.
+  let lastAssistantText = "";
   omp.on("session_start", async (_event, ctx) => {
     if (!isRootSession(ctx)) return;
     callHookSync("session-start", { session_id: sessionID(ctx) });
@@ -172,6 +200,7 @@ export default function (omp: ExtensionAPI) {
   });
   omp.on("before_agent_start", async (event, ctx) => {
     if (!isRootSession(ctx)) return;
+    lastAssistantText = "";
     callHookSync("user-prompt-submit", { session_id: sessionID(ctx), prompt: event.prompt });
   });
   omp.on("tool_approval_requested", async (event, ctx) => {
@@ -193,8 +222,9 @@ export default function (omp: ExtensionAPI) {
   });
   omp.on("agent_end", async (event, ctx) => {
     if (!isRootSession(ctx)) return;
+    lastAssistantText = finalAssistantText(event) || lastAssistantText;
     if (!event.willContinue) {
-      callHookSync("stop", { session_id: sessionID(ctx) });
+      callHookSync("stop", { session_id: sessionID(ctx), last_assistant_message: lastAssistantText });
     }
   });
   omp.on("session_shutdown", async (_event, ctx) => {

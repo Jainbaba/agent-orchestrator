@@ -59,6 +59,14 @@ func (k ProviderSwitchRefusalKind) Retryable() bool {
 type ProviderSwitchRequest struct {
 	TargetHarness  AgentHarness
 	IdempotencyKey string
+	// Model and Effort are what the target starts on. Empty keeps its default.
+	Model  string
+	Effort string
+	// FastMode starts the target on its faster tier, where its model has one.
+	FastMode bool
+	// HandoffNote is the note the target provider starts with. The switch
+	// front door builds it; it is never accepted from a client.
+	HandoffNote string
 }
 
 // ChatProviderSwitch is an internal launch reservation. The source controller
@@ -83,4 +91,29 @@ type ProviderSwitchCapability struct {
 	Supported bool
 	Reason    ProviderSwitchRefusalKind
 	Retryable bool
+}
+
+// ProviderSwitchError crosses the Chat/TUI dispatch boundary without coupling
+// the session manager to either transport controller.
+type ProviderSwitchError struct {
+	Kind   ProviderSwitchRefusalKind
+	Detail string
+	Cause  error
+}
+
+func (e *ProviderSwitchError) Error() string {
+	if e.Detail != "" {
+		return e.Detail
+	}
+	return string(e.Kind)
+}
+func (e *ProviderSwitchError) Unwrap() error { return e.Cause }
+
+type ProviderSwitchResult struct {
+	SessionID            SessionID
+	ConversationID       string
+	BranchID             string
+	SourceHarness        AgentHarness
+	TargetHarness        AgentHarness
+	ProviderConversation string
 }

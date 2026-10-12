@@ -63,6 +63,7 @@ type Service struct {
 	probed           map[domain.AgentHarness]ports.ChatCapabilities
 	switchMu         sync.Mutex
 	switchResults    map[string]ProviderSwitchResult
+	terminalSwitcher TerminalProviderSwitcher
 }
 
 // SetReportCoordinator installs the report piggyback hook after daemon wiring
@@ -650,11 +651,19 @@ func (s *Service) startLocked(ctx context.Context, cfg StartConfig) (*Controller
 		}
 	}
 
-	providerSystemPrompt := cfg.SystemPrompt
+	// A provider that took over through a switch keeps its handoff note for
+	// the life of its branch. The switch supplies it on the first start; any
+	// later restart reads it back from the branch, so the note is not lost
+	// with the process.
+	handoffNote := activeBranch.HandoffNote
 	if providerSwitch := cfg.ProviderSwitch; providerSwitch != nil {
+		handoffNote = providerSwitch.Bootstrap
+	}
+	providerSystemPrompt := cfg.SystemPrompt
+	if strings.TrimSpace(handoffNote) != "" {
 		providerSystemPrompt = strings.TrimSpace(strings.Join([]string{
 			strings.TrimSpace(cfg.SystemPrompt),
-			"AO provider handoff context:\n\n" + providerSwitch.Bootstrap,
+			"AO provider handoff context:\n\n" + handoffNote,
 		}, "\n\n"))
 	}
 
@@ -1589,6 +1598,10 @@ func (s *Service) Snapshot(ctx context.Context, id domain.SessionID) (Snapshot, 
 	if controller, err := s.Controller(id); err == nil {
 		state = controller.State()
 		caps = controller.Capabilities()
+		// Fast and plan mode live with the controller, not in the stored row.
+		live := controller.Settings()
+		rows.Conversation.Settings.FastMode = live.FastMode
+		rows.Conversation.Settings.PlanMode = live.PlanMode
 	}
 
 	return Snapshot{
@@ -1609,31 +1622,6 @@ func (s *Service) Snapshot(ctx context.Context, id domain.SessionID) (Snapshot, 
 		Usage:                            rows.Conversation.Usage,
 		RateLimits:                       rows.Conversation.RateLimits,
 	}, nil
-}
-
-// ProviderHandoffContext reads the durable material that would be sent to a
-// target provider. It is intentionally read-only and must run before a caller
-// fences or stops the source controller.
-func (s *Service) ProviderHandoffContext(
-	ctx context.Context,
-	id domain.SessionID,
-) (ProviderHandoffContext, error) {
-	record, err := s.requireChatSession(ctx, id)
-	if err != nil {
-		return ProviderHandoffContext{}, err
-	}
-	conversation, err := s.store.ConversationForSession(ctx, id)
-	if err != nil {
-		return ProviderHandoffContext{}, err
-	}
-	if s.reader == nil {
-		return ProviderHandoffContext{}, errors.New("conversation reader is unavailable")
-	}
-	rows, err := s.reader.LoadConversationSnapshot(ctx, conversation.ID)
-	if err != nil {
-		return ProviderHandoffContext{}, fmt.Errorf("load handoff conversation %s: %w", conversation.ID, err)
-	}
-	return BuildProviderHandoffContext(record, rows), nil
 }
 
 // SnapshotForReview reads a reviewer-owned chat narrative without treating the
@@ -1709,6 +1697,10 @@ func (s *Service) SnapshotPage(ctx context.Context, id domain.SessionID, beforeS
 	if controller, err := s.Controller(id); err == nil {
 		state = controller.State()
 		caps = controller.Capabilities()
+		// Fast and plan mode live with the controller, not in the stored row.
+		live := controller.Settings()
+		rows.Conversation.Settings.FastMode = live.FastMode
+		rows.Conversation.Settings.PlanMode = live.PlanMode
 	}
 	return Snapshot{
 		Conversation:                     rows.Conversation,

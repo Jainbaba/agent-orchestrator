@@ -2029,6 +2029,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{sessionId}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a session's turns, newest first, across Chat and Terminal */
+        get: operations["getSessionHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{sessionId}/interface-transition": {
         parameters: {
             query?: never;
@@ -3106,6 +3123,7 @@ export interface components {
             isDefault?: boolean;
             label: string;
             provider?: string;
+            supportsFast?: boolean;
         };
         AgentModelsResponse: {
             agentId: string;
@@ -3715,6 +3733,7 @@ export interface components {
             displayName: string;
             efforts?: string[];
             id: string;
+            supportsFast?: boolean;
         };
         ConversationModelsResponse: {
             models: components["schemas"]["ConversationModelResponse"][];
@@ -3819,7 +3838,9 @@ export interface components {
         ConversationTurnSettingsPayload: {
             /** @enum {string} */
             approvalMode?: "default" | "accept-edits" | "auto" | "bypass-permissions";
+            fastMode?: boolean;
             model?: string;
+            planMode?: boolean;
             reasoningEffort?: string;
         };
         ConversationUsagePayload: {
@@ -4522,7 +4543,10 @@ export interface components {
             supported: boolean;
         };
         ProviderSwitchRequest: {
+            effort?: string;
+            fastMode?: boolean;
             idempotencyKey?: string;
+            model?: string;
             targetHarness: string;
         };
         ProviderSwitchResponse: {
@@ -4722,6 +4746,18 @@ export interface components {
         SessionActivityResponse: {
             current?: components["schemas"]["SessionStepResponse"];
             recent: components["schemas"]["SessionStepResponse"][];
+        };
+        SessionHistoryResponse: {
+            offset: number;
+            total: number;
+            turns: components["schemas"]["SessionHistoryTurn"][];
+        };
+        SessionHistoryTurn: {
+            agentResponse: string;
+            /** Format: date-time */
+            at: string;
+            harness?: string;
+            userRequest: string;
         };
         SessionInterfaceTransition: {
             /** Format: date-time */
@@ -4934,6 +4970,10 @@ export interface components {
             coordinationId?: string;
             /** @description AO hook sub-command that produced this state (e.g. post-tool-use). */
             event?: string;
+            /** @description The agent's final message of the turn, kept for terminal turn history only. */
+            finalAssistantMessage?: string;
+            /** @description The agent whose hook sent this signal. A signal from an agent the session no longer runs is ignored. */
+            harness?: string;
             /** @description Latest assistant update exposed by the provider hook. */
             latestAssistantUpdate?: string;
             /** @description Latest real user prompt exposed by the provider hook. */
@@ -4964,6 +5004,8 @@ export interface components {
             toolUseId?: string;
             /** @description Read-only provider-native transcript path exposed by the hook. */
             transcriptPath?: string;
+            /** @description The user's request for the turn, kept for terminal turn history only. */
+            turnUserRequest?: string;
             /** @description Provider transcript metadata used by the local usage pipeline. */
             usage?: components["schemas"]["UsageHookMetadata"];
         };
@@ -12903,6 +12945,70 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    getSessionHistory: {
+        parameters: {
+            query?: {
+                /** @description Number of newest turns to skip. */
+                offset?: number;
+                /** @description Maximum turns to return. Defaults to 10. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Session identifier, e.g. project-1. */
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionHistoryResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

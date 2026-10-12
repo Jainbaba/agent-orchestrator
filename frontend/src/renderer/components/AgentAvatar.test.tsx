@@ -20,7 +20,9 @@ describe("AgentAvatar", () => {
 	it("renders the OMP brand asset", () => {
 		render(<AgentAvatar provider="omp" />);
 
-		expect(screen.getByRole("img", { name: "omp" })).toHaveAttribute("src", expect.stringContaining("omp.png"));
+		const img = screen.getByRole("img", { name: "omp" });
+		expect(img).toHaveAttribute("src", expect.stringContaining("data:image/svg+xml"));
+		expect(img).toHaveAttribute("src", expect.stringContaining("linearGradient"));
 	});
 
 	it("renders the Gemini CLI brand asset", () => {
@@ -65,9 +67,9 @@ describe("AgentAvatar", () => {
 			</>,
 		);
 
-		expect(screen.getByRole("img", { name: "opencode-v2" })).toHaveAttribute(
-			"src",
-			screen.getByRole("img", { name: "opencode" }).getAttribute("src"),
-		);
+		// A single-colour mark is a mask painted in the text colour, not an <img>.
+		const mark = screen.getByRole("img", { name: "opencode" }).getAttribute("style");
+		expect(mark).toContain("opencode");
+		expect(screen.getByRole("img", { name: "opencode-v2" })).toHaveAttribute("style", mark);
 	});
 });

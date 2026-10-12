@@ -1606,10 +1606,6 @@ func (c *SessionsController) exitAgent(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
-
-
-
 func (c *SessionsController) kill(w http.ResponseWriter, r *http.Request) {
 	if c.Svc == nil {
 		apispec.NotImplemented(w, r, "POST", "/api/v1/sessions/{sessionId}/kill")
@@ -1870,16 +1866,21 @@ func (c *SessionsController) activity(w http.ResponseWriter, r *http.Request) {
 	// never match its pre/post counterpart, so overlong values are dropped by
 	// the CLI; the cap here is defense against non-AO callers).
 	sig := ports.ActivitySignal{
-		Timestamp:                    in.ObservedAt,
-		Valid:                        state != "",
-		State:                        state,
-		Event:                        capActivityMeta(domain.SanitizeControlChars(in.Event)),
-		ToolName:                     capActivityMeta(domain.SanitizeControlChars(in.ToolName)),
-		ToolUseID:                    capActivityMeta(domain.SanitizeControlChars(in.ToolUseID)),
-		SubagentID:                   capActivityMeta(domain.SanitizeControlChars(in.SubagentID)),
-		AgentSessionID:               agentSessionID,
-		LatestUserPrompt:             capActivityText(domain.SanitizeControlChars(strings.TrimSpace(in.LatestUserPrompt)), 16<<10),
-		LatestAssistantUpdate:        capActivityText(domain.SanitizeControlChars(strings.TrimSpace(in.LatestAssistantUpdate)), 16<<10),
+		Timestamp:             in.ObservedAt,
+		Valid:                 state != "",
+		State:                 state,
+		Event:                 capActivityMeta(domain.SanitizeControlChars(in.Event)),
+		ToolName:              capActivityMeta(domain.SanitizeControlChars(in.ToolName)),
+		ToolUseID:             capActivityMeta(domain.SanitizeControlChars(in.ToolUseID)),
+		SubagentID:            capActivityMeta(domain.SanitizeControlChars(in.SubagentID)),
+		AgentSessionID:        agentSessionID,
+		LatestUserPrompt:      capActivityText(domain.SanitizeControlChars(strings.TrimSpace(in.LatestUserPrompt)), 16<<10),
+		LatestAssistantUpdate: capActivityText(domain.SanitizeControlChars(strings.TrimSpace(in.LatestAssistantUpdate)), 16<<10),
+		FinalAssistantMessage: capActivityText(domain.SanitizeControlChars(strings.TrimSpace(in.FinalAssistantMessage)), 16<<10),
+		TurnUserRequest:       capActivityText(domain.SanitizeControlChars(strings.TrimSpace(in.TurnUserRequest)), 16<<10),
+		// After a provider switch the previous agent's hook config can still be
+		// in the workspace. Its hooks must not report as the agent now running.
+		ExpectedHarness:              domain.AgentHarness(capActivityMeta(domain.SanitizeControlChars(strings.TrimSpace(in.Harness)))),
 		ConversationCheckpointOrigin: checkpointOrigin,
 		CoordinationID:               capActivityMeta(domain.SanitizeControlChars(strings.TrimSpace(in.CoordinationID))),
 		ProviderTurnID:               capActivityMeta(domain.SanitizeControlChars(strings.TrimSpace(in.ProviderTurnID))),
@@ -2049,7 +2050,6 @@ func (c *SessionsController) getOrchestrator(w http.ResponseWriter, r *http.Requ
 func sessionID(r *http.Request) domain.SessionID {
 	return domain.SessionID(chi.URLParam(r, "sessionId"))
 }
-
 
 func orchestratorID(r *http.Request) domain.SessionID {
 	return domain.SessionID(chi.URLParam(r, "id"))
@@ -2292,8 +2292,6 @@ func sessionView(s domain.Session) SessionView {
 	}
 	return view
 }
-
-
 
 func sessionViews(sessions []domain.Session) []SessionView {
 	out := make([]SessionView, 0, len(sessions))

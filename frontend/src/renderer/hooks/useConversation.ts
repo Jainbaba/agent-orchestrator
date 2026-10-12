@@ -414,6 +414,47 @@ export function useConversation(sessionId: string | undefined, hostId?: string):
 }
 
 /** Commands against a conversation. Each refetches the snapshot on success. */
+export function useProviderSwitchCommand(sessionId: string | undefined, hostId?: string) {
+	const queryClient = useQueryClient();
+	const switchProvider = useMutation({
+		mutationFn: async ({ targetHarness, model, effort, fastMode }: {
+			targetHarness: string;
+			model?: string;
+			effort?: string;
+			fastMode?: boolean;
+		}) => {
+			if (!sessionId) throw new Error("No session is selected.");
+			const { data, error } = await clientForSessionHost(hostId).POST(
+				"/api/v1/sessions/{sessionId}/provider-switch",
+				{
+					params: { path: { sessionId } },
+					body: { targetHarness, model, effort, fastMode, idempotencyKey: crypto.randomUUID() },
+				},
+			);
+			if (error) throw error;
+			return data;
+		},
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: workspaceQueryKeyForHost(hostId) });
+			if (!sessionId) return;
+			// These catalogs are provider-owned but keyed by the stable AO session id.
+			// A provider switch therefore must evict the outgoing provider's values
+			// before the next render can display them as if they belonged to the target.
+			clearConversationProviderCatalogs(queryClient, sessionId, hostId);
+			await queryClient.invalidateQueries({ queryKey: conversationQueryKey(sessionId, hostId) });
+			invalidateConversationProviderCatalogs(queryClient, sessionId, hostId);
+		},
+	});
+	return {
+		switchProvider: (targetHarness: string, model?: string, effort?: string, fastMode?: boolean) =>
+			switchProvider.mutateAsync({ targetHarness, model, effort, fastMode }),
+		switchProviderPending: switchProvider.isPending,
+		switchProviderError: switchProvider.error ? apiErrorMessage(switchProvider.error) : undefined,
+		resetSwitchProviderError: switchProvider.reset,
+	};
+}
+
+/** Commands against a conversation. Each refetches the snapshot on success. */
 export function useConversationCommands(sessionId: string | undefined, hostId?: string) {
 	const queryClient = useQueryClient();
 	const stateSessionId = sessionId ? sessionUiKey(sessionId, hostId) : undefined;
@@ -1508,6 +1549,8 @@ export function toSnapshot(wire: WireSnapshot): ConversationSnapshot {
 			model: wire.settings?.model || undefined,
 			reasoningEffort: wire.settings?.reasoningEffort || undefined,
 			approvalMode: (wire.settings?.approvalMode as ApprovalMode | undefined) || undefined,
+			fastMode: wire.settings?.fastMode || undefined,
+			planMode: wire.settings?.planMode || undefined,
 		},
 		// Absent means the provider has not reported, which the meter renders as
 		// nothing rather than as an empty bar.

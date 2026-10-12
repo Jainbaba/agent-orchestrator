@@ -5782,6 +5782,66 @@ paths:
       summary: Exit the agent while preserving its AO session
       tags:
       - sessions
+  /api/v1/sessions/{sessionId}/history:
+    get:
+      operationId: getSessionHistory
+      parameters:
+      - description: Session identifier, e.g. project-1.
+        in: path
+        name: sessionId
+        required: true
+        schema:
+          description: Session identifier, e.g. project-1.
+          type: string
+      - description: Number of newest turns to skip.
+        in: query
+        name: offset
+        schema:
+          description: Number of newest turns to skip.
+          minimum: 0
+          type: integer
+      - description: Maximum turns to return. Defaults to 10.
+        in: query
+        name: limit
+        schema:
+          description: Maximum turns to return. Defaults to 10.
+          maximum: 50
+          minimum: 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionHistoryResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Internal Server Error
+        "501":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+          description: Not Implemented
+      summary: Read a session's turns, newest first, across Chat and Terminal
+      tags:
+      - conversations
   /api/v1/sessions/{sessionId}/interface-transition:
     delete:
       operationId: cancelSessionInterfaceTransition
@@ -9337,6 +9397,8 @@ components:
           type: string
         provider:
           type: string
+        supportsFast:
+          type: boolean
       required:
       - id
       - label
@@ -11002,6 +11064,8 @@ components:
           type: array
         id:
           type: string
+        supportsFast:
+          type: boolean
       required:
       - id
       - displayName
@@ -11287,8 +11351,12 @@ components:
           - auto
           - bypass-permissions
           type: string
+        fastMode:
+          type: boolean
         model:
           type: string
+        planMode:
+          type: boolean
         reasoningEffort:
           type: string
       type: object
@@ -13158,7 +13226,15 @@ components:
       type: object
     ProviderSwitchRequest:
       properties:
+        effort:
+          maxLength: 64
+          type: string
+        fastMode:
+          type: boolean
         idempotencyKey:
+          type: string
+        model:
+          maxLength: 200
           type: string
         targetHarness:
           type: string
@@ -13670,6 +13746,37 @@ components:
           type: array
       required:
       - recent
+      type: object
+    SessionHistoryResponse:
+      properties:
+        offset:
+          type: integer
+        total:
+          type: integer
+        turns:
+          items:
+            $ref: '#/components/schemas/SessionHistoryTurn'
+          type: array
+      required:
+      - turns
+      - total
+      - offset
+      type: object
+    SessionHistoryTurn:
+      properties:
+        agentResponse:
+          type: string
+        at:
+          format: date-time
+          type: string
+        harness:
+          type: string
+        userRequest:
+          type: string
+      required:
+      - userRequest
+      - agentResponse
+      - at
       type: object
     SessionInterfaceTransition:
       properties:
@@ -14220,6 +14327,16 @@ components:
         event:
           description: AO hook sub-command that produced this state (e.g. post-tool-use).
           type: string
+        finalAssistantMessage:
+          description: The agent's final message of the turn, kept for terminal turn
+            history only.
+          maxLength: 16384
+          type: string
+        harness:
+          description: The agent whose hook sent this signal. A signal from an agent
+            the session no longer runs is ignored.
+          maxLength: 64
+          type: string
         latestAssistantUpdate:
           description: Latest assistant update exposed by the provider hook.
           maxLength: 16384
@@ -14273,6 +14390,11 @@ components:
         transcriptPath:
           description: Read-only provider-native transcript path exposed by the hook.
           maxLength: 4096
+          type: string
+        turnUserRequest:
+          description: The user's request for the turn, kept for terminal turn history
+            only.
+          maxLength: 16384
           type: string
         usage:
           $ref: '#/components/schemas/UsageHookMetadata'

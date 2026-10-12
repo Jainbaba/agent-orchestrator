@@ -282,6 +282,10 @@ type ConversationBranch struct {
 	ProviderIDsScoped bool      `json:"-"`
 	Active            bool      `json:"active"`
 	CreatedAt         time.Time `json:"createdAt"`
+
+	// HandoffNote is the note a provider switch gave this branch's provider.
+	// It is re-applied when that provider restarts and never reaches a client.
+	HandoffNote string `json:"-"`
 }
 
 // ConversationBranchPoint describes the sibling continuations available at one
@@ -502,6 +506,13 @@ type ConversationSettings struct {
 	Model string `json:"model,omitempty"`
 	// ReasoningEffort is how much thinking to spend, from the model's own list.
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
+	// FastMode asks for the provider's faster tier. It is held for the life of
+	// the controller and not stored: a restart returns to the standard tier,
+	// which is the cheaper way to be wrong.
+	FastMode bool `json:"fastMode,omitempty"`
+	// PlanMode asks the provider to plan rather than act, where AO sets that per
+	// turn. Like FastMode it is held for the life of the controller only.
+	PlanMode bool `json:"planMode,omitempty"`
 	// ApprovalMode is AO's permission vocabulary, applied per turn.
 	ApprovalMode PermissionMode `json:"approvalMode,omitempty"`
 	// OpenCodeMode is the provider-owned mode explicitly selected through ACP.

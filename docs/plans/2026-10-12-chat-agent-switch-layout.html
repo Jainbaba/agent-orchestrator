@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat agent switch layout</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  :root {
+    --page: #0b0d10; --surface-1: #111418; --surface-2: #171b21;
+    --border: rgba(255,255,255,.10); --border-strong: rgba(255,255,255,.18);
+    --text-primary: #e8eaed; --text-secondary: #a4abb5; --text-muted: #6f7782;
+    --accent: #6ea8fe; --radius: 8px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --page: #f4f5f7; --surface-1: #fafafb; --surface-2: #ffffff;
+      --border: rgba(0,0,0,.10); --border-strong: rgba(0,0,0,.18);
+      --text-primary: #16181c; --text-secondary: #555c66; --text-muted: #8a919b;
+      --accent: #1f6fe0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px; background: var(--page); color: var(--text-primary);
+         font: 13px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 16px; font-weight: 500; margin: 0 auto 4px; max-width: 720px; }
+  p.sub { color: var(--text-secondary); margin: 0 auto 20px; max-width: 720px; }
+  .frame { max-width: 720px; margin: 0 auto; background: var(--surface-1); border: 1px solid var(--border);
+           border-radius: 12px; padding: 20px 20px 16px; }
+  .row { display: flex; align-items: center; }
+  .label { font-size: 11px; color: var(--accent); }
+  .bubble { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 6px 12px; }
+  .rule { flex: 1; border-top: 1px solid var(--border); }
+  .handoff { gap: 8px; color: var(--text-secondary); font-size: 12px; margin-bottom: 6px; }
+  .picker { width: 280px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; }
+  .tabs { gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .tab { padding: 4px 8px; color: var(--text-secondary); }
+  .tab.on { color: var(--text-primary); border-bottom: 2px solid var(--accent); }
+  .search { gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-muted); }
+  .model { padding: 6px 12px; }
+  .model.on { background: var(--surface-1); }
+  .kbd { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+  .star { margin-left: 10px; color: var(--text-muted); font-size: 14px; }
+  .effort { border-top: 1px solid var(--border); padding: 8px 12px 12px; }
+  .track { height: 14px; border-radius: 7px; background: var(--surface-1); border: 1px solid var(--border); position: relative; }
+  .thumb { position: absolute; left: 62%; top: -2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-primary); }
+  .composer { background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; }
+  .strip { gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .bar { gap: 12px; padding: 8px 12px; }
+  .chip { margin-left: auto; gap: 6px; border: 1px solid var(--accent); border-radius: var(--radius); padding: 3px 8px; }
+  .send { width: 26px; height: 26px; border-radius: 50%; background: var(--text-primary); color: var(--surface-2); justify-content: center; }
+  ul.notes { max-width: 720px; margin: 20px auto 0; padding-left: 18px; color: var(--text-secondary); }
+  ul.notes b { color: var(--text-primary); font-weight: 500; }
+</style>
+</head>
+<body>
+<h1>Switching agent from the chat box</h1>
+<p class="sub">Layout for Agent Orchestrator, modelled on Synara's chat box. Box-level mock-up, not final styling.</p>
+
+<div class="frame">
+  <div class="row" style="justify-content:flex-end;margin-bottom:10px"><span class="bubble">fix the importer</span></div>
+  <div style="margin-bottom:14px">Importer fixed, tests pass.</div>
+
+  <div class="row handoff">
+    <span class="rule"></span>
+    <i class="ti ti-arrows-exchange" aria-hidden="true"></i>
+    <span>Context handoff</span><span>Codex</span>
+    <i class="ti ti-arrow-right" aria-hidden="true"></i>
+    <span style="color:var(--text-primary)">Claude Code · Opus</span>
+    <span style="color:var(--text-muted)">High</span>
+    <span class="rule"></span>
+  </div>
+  <div class="label" style="text-align:center;margin-bottom:14px">A · handoff line, click to view the note</div>
+
+  <div class="row" style="justify-content:flex-end;margin-bottom:6px">
+    <div class="picker">
+      <div class="row tabs">
+        <span class="tab" aria-label="Starred"><i class="ti ti-star" aria-hidden="true"></i></span>
+        <span class="tab on">Claude Code</span>
+        <span class="tab">Codex</span>
+        <span class="tab">Kimchi</span>
+        <span class="tab" style="margin-left:auto" aria-label="More agents"><i class="ti ti-dots" aria-hidden="true"></i></span>
+      </div>
+      <div class="row search"><i class="ti ti-search" aria-hidden="true"></i>Search models</div>
+      <div style="padding:4px 0">
+        <div class="row model on"><span>Opus 5.5</span><i class="ti ti-check" style="margin-left:8px" aria-hidden="true"></i><span class="kbd">⌘1</span><i class="ti ti-star star" aria-hidden="true"></i></div>
+        <div class="row model"><span>Sonnet 5.5</span><span class="kbd">⌘2</span><i class="ti ti-star star" aria-hidden="true"></i></div>
+        <div class="row model"><span>Haiku 5.5</span><span class="kbd">⌘3</span><i class="ti ti-star star" aria-hidden="true"></i></div>
+      </div>
+      <div class="effort">
+        <div style="text-align:center;font-size:12px;color:var(--accent);margin-bottom:6px">High</div>
+        <div class="track"><span class="thumb"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="label" style="text-align:right;margin-bottom:10px">B · picker: agent tabs, models, effort</div>
+
+  <div class="composer">
+    <div class="row strip">
+      <i class="ti ti-refresh" aria-hidden="true"></i>
+      <span>Next message goes to Claude Code with a handoff note.</span>
+      <span style="margin-left:auto;color:var(--text-secondary)" aria-label="Undo switch"><i class="ti ti-x" aria-hidden="true"></i></span>
+    </div>
+    <div style="padding:12px;color:var(--text-muted)">Message the agent</div>
+    <div class="row bar">
+      <i class="ti ti-plus" aria-hidden="true"></i>
+      <span class="row" style="gap:4px;color:var(--text-secondary)"><i class="ti ti-shield" aria-hidden="true"></i>Auto-approve<i class="ti ti-chevron-down" style="font-size:12px" aria-hidden="true"></i></span>
+      <span class="row chip"><span>Claude Code</span><span style="color:var(--text-secondary)">Opus 5.5</span><span style="color:var(--text-muted)">High</span><i class="ti ti-chevron-down" style="font-size:12px" aria-hidden="true"></i></span>
+      <span class="row send"><i class="ti ti-arrow-up" aria-hidden="true"></i></span>
+    </div>
+  </div>
+  <div class="row label" style="justify-content:space-between;margin-top:6px"><span>C · pending strip, x undoes it</span><span>D · one chip: agent, model, effort</span></div>
+</div>
+
+<ul class="notes">
+  <li><b>A</b> replaces today's "Switched provider from codex to claude-code" entry in the transcript.</li>
+  <li><b>B</b> opens upward from the chip. Ready agents get tabs; the rest sit behind "…".</li>
+  <li><b>C</b> appears when another agent is picked. Nothing switches until the next message is sent.</li>
+  <li><b>D</b> is the existing model and effort control with the agent name added.</li>
+</ul>
+</body>
+</html>

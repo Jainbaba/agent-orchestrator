@@ -91,11 +91,6 @@ func sentryEnvironment(version string) string {
 	}
 }
 
-
-
-
-
-
 // Run starts the daemon and blocks until it exits. SIGINT/SIGTERM drive
 // graceful shutdown through the HTTP server and background workers.
 func Run() error {
@@ -459,6 +454,12 @@ func Run() error {
 		},
 	})
 	sessMgr = wiredSessMgr
+	if switcher, ok := wiredSessMgr.(interface {
+		SwitchTUIProvider(context.Context, domain.SessionID, domain.ProviderSwitchRequest) (domain.ProviderSwitchResult, error)
+		TUIProviderSwitchCapabilities(context.Context, domain.SessionID, domain.AgentHarness) (domain.ProviderSwitchCapability, error)
+	}); ok {
+		chatSvc.SetTerminalProviderSwitcher(switcher)
+	}
 	if tunable, ok := sessMgr.(interface {
 		SetModelCatalog(interface {
 			Models(context.Context, string, string, bool) (ports.AgentModelCatalog, error)

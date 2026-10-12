@@ -403,7 +403,15 @@ export interface SystemEventDetail {
 		| "steer"
 		| "plan"
 		| "context.reset"
-		| "context.boundary";
+		| "context.boundary"
+		| "provider_switch";
+	/** provider_switch */
+	sourceHarness?: string;
+	targetHarness?: string;
+	sourceModel?: string;
+	sourceEffort?: string;
+	targetModel?: string;
+	targetEffort?: string;
 	/** model.rerouted */
 	fromModel?: string;
 	toModel?: string;
@@ -566,6 +574,10 @@ export interface TurnSettings {
 	model?: string;
 	reasoningEffort?: string;
 	approvalMode?: ApprovalMode;
+	/** Ask for the provider's faster tier, on models that offer one. */
+	fastMode?: boolean;
+	/** Ask the provider to plan rather than act, where AO sets that per turn. */
+	planMode?: boolean;
 }
 
 /** One model the provider offers for this session. */
@@ -578,6 +590,8 @@ export interface ChatModel {
 	/** Reasoning levels this model supports, in the provider's order. */
 	efforts?: string[];
 	defaultEffort?: string;
+	/** The model can run on the provider's faster tier. */
+	supportsFast?: boolean;
 }
 
 /** One provider-owned setting advertised for this live chat session. */

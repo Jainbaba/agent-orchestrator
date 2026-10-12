@@ -1,8 +1,6 @@
 import {
 	ArrowRightLeft,
 	Loader2,
-	MessageSquare,
-	SquareTerminal,
 	TriangleAlert,
 	X,
 } from "lucide-react";
@@ -20,7 +18,6 @@ import {
 import { cn } from "../lib/utils";
 import { TopbarButton } from "./TopbarButton";
 import { Button } from "./ui/button";
-import { DropdownMenuItem } from "./ui/dropdown-menu";
 import {
 	Dialog,
 	DialogContent,
@@ -30,6 +27,42 @@ import {
 	DialogTitle,
 } from "./ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+
+const ROUNDED_ICON = {
+	viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2,
+	strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true,
+} as const;
+
+/** Lucide's boxed terminal prompt with rounder corners. */
+export function RoundedTerminalIcon({ className }: { className?: string }) {
+	return (
+		<svg {...ROUNDED_ICON} data-icon="rounded-terminal" className={className}>
+			<rect x="3" y="3" width="18" height="18" rx="6" />
+			<path d="m7.5 11 2-2-2-2" />
+			<path d="M11.5 13h4" />
+		</svg>
+	);
+}
+
+/** A speech bubble with rounder corners, for the chat view. */
+export function RoundedChatIcon({ className }: { className?: string }) {
+	return (
+		<svg {...ROUNDED_ICON} data-icon="rounded-chat" className={className}>
+			<path d="M21 13a5 5 0 0 1-5 5H8l-5 3.5V8a5 5 0 0 1 5-5h8a5 5 0 0 1 5 5z" />
+		</svg>
+	);
+}
+
+/** The rounded terminal box with a plus: open another terminal. */
+export function NewTerminalIcon({ className }: { className?: string }) {
+	return (
+		<svg {...ROUNDED_ICON} data-icon="new-terminal" className={className}>
+			<rect x="3" y="3" width="18" height="18" rx="6" />
+			<path d="m7 14 2-2-2-2" />
+			<path d="M12.5 12h4.5M14.75 9.75v4.5" />
+		</svg>
+	);
+}
 
 function targetLabel(target: SessionInterfaceMode): string {
 	return target === "chat" ? "chat UI" : "terminal UI";
@@ -137,8 +170,8 @@ export function SessionInterfaceSwitchButton({
 	}
 
 	const label = `Switch to ${targetLabel(target)}`;
-	const tooltipLabel = supported ? `${label} using this agent's native conversation` : disabledReason || label;
-	const TargetIcon = target === "chat" ? MessageSquare : SquareTerminal;
+	const tooltipLabel = supported ? `${label} using this agent's native conversation.` : disabledReason || label;
+	const TargetIcon = target === "chat" ? RoundedChatIcon : RoundedTerminalIcon;
 	return (
 		<Tooltip>
 			<TooltipTrigger asChild>
@@ -164,7 +197,7 @@ export function SessionInterfaceSwitchButton({
 					</TopbarButton>
 				</span>
 			</TooltipTrigger>
-			<TooltipContent side="bottom">{tooltipLabel}</TooltipContent>
+			<TooltipContent side="bottom" className="max-w-52 text-left text-wrap">{tooltipLabel}</TooltipContent>
 		</Tooltip>
 	);
 }
@@ -448,35 +481,4 @@ export function SessionInterfaceTransitionNotice({
 
 export function SessionInterfaceActionGroup({ children }: { children: ReactNode }) {
 	return <div className="inline-flex shrink-0 items-center gap-2">{children}</div>;
-}
-
-export function SessionInterfaceSwitchMenuItem({
-	target,
-	supported,
-	disabledReason,
-	pending,
-	onClick,
-}: {
-	target: SessionInterfaceMode;
-	supported: boolean;
-	disabledReason?: string;
-	pending?: boolean;
-	onClick: () => void;
-}) {
-	const label = `Switch to ${targetLabel(target)}`;
-	const TargetIcon = target === "chat" ? MessageSquare : SquareTerminal;
-	return (
-		<DropdownMenuItem
-			disabled={!supported || pending}
-			onSelect={onClick}
-			title={supported ? label : disabledReason || label}
-		>
-			{pending ? (
-				<Loader2 aria-hidden="true" className="size-icon-lg animate-spin" />
-			) : (
-				<TargetIcon aria-hidden="true" className="size-icon-lg" />
-			)}
-			{label}
-		</DropdownMenuItem>
-	);
 }

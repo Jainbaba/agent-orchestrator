@@ -11,9 +11,9 @@ import (
 
 func newInputLeaseTestManager() *Manager {
 	return &Manager{
-		agentOperations:     make(map[domain.SessionID]agentOperationKind),
-		inputLeases:         make(map[domain.SessionID]int),
-		inputDrained:        make(map[domain.SessionID]chan struct{}),
+		agentOperations: make(map[domain.SessionID]agentOperationKind),
+		inputLeases:     make(map[domain.SessionID]int),
+		inputDrained:    make(map[domain.SessionID]chan struct{}),
 	}
 }
 

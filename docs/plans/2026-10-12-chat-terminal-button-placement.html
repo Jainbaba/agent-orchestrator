@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat terminal button placement</title>
+<style>
+  :root {
+    --page: #0b0d10; --surface-1: #111418; --surface-2: #171b21; --surface-3: #1f242c;
+    --border: rgba(255,255,255,.10); --border-strong: rgba(255,255,255,.18);
+    --text: #e8eaed; --text-2: #a4abb5; --text-3: #6f7782;
+    --accent: #6ea8fe; --claude: #d97757; --term: #0d1014;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --page: #f4f5f7; --surface-1: #fafafb; --surface-2: #ffffff; --surface-3: #eef0f3;
+      --border: rgba(0,0,0,.10); --border-strong: rgba(0,0,0,.18);
+      --text: #16181c; --text-2: #555c66; --text-3: #8a919b;
+      --accent: #1f6fe0; --term: #f0f1f4;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 16px 40px; background: var(--page); color: var(--text);
+         font: 13px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 13px; font-weight: 600; margin: 30px 0 4px; }
+  p { margin: 0 0 14px; color: var(--text-2); }
+  .opt { margin: 0 0 18px; }
+  .opt-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .tag { font-size: 11px; font-weight: 600; color: var(--accent); }
+  .pick { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); }
+  .why { font-size: 12px; color: var(--text-2); margin: 6px 0 0; }
+  .frame { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .row { display: flex; align-items: center; }
+  .topbar { gap: 6px; height: 36px; padding: 0 10px 0 0; border-bottom: 1px solid var(--border); }
+  .tab { gap: 7px; height: 36px; padding: 0 10px; border-bottom: 2px solid var(--text-2); min-width: 0; }
+  .tab span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tools { margin-left: auto; gap: 12px; color: var(--text-3); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; color: var(--text-2); }
+  .btn.hl { outline: 1.5px solid var(--accent); color: var(--text); }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
+  .seg .btn { border-radius: 0; }
+  .seg .on { background: var(--surface-3); color: var(--text); }
+  .seg.hl { outline: 1.5px solid var(--accent); }
+  .pill { background: var(--accent); color: #fff; font-size: 11px; padding: 3px 9px; border-radius: 6px; }
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .mark { width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.6px solid currentColor; }
+  .mark.c { border: 0; background: var(--claude); clip-path: polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); border-radius: 0; }
+  .chip { gap: 6px; height: 26px; padding: 0 8px; border-radius: 7px; background: var(--surface-3); white-space: nowrap; }
+  .chip.hl { outline: 1.5px solid var(--accent); }
+  .muted { color: var(--text-3); }
+  .info { gap: 7px; height: 26px; padding: 0 4px 0 8px; border-radius: 7px; border: 1px solid var(--border-strong); font-size: 12px; white-space: nowrap; }
+  .go { font-size: 11px; padding: 2px 9px; border-radius: 5px; background: var(--text); color: var(--surface-2); font-weight: 600; }
+  .agentbar { gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border); }
+  .term { background: var(--term); padding: 10px 12px; font: 11.5px/1.6 ui-monospace, Menlo, monospace; color: var(--text-2); }
+  .composer { margin: 12px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 12px; }
+  .bar { gap: 10px; padding: 7px 10px; }
+  .send { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; justify-content: center; }
+  .picker { width: 250px; margin: 6px 0 0 10px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; font-size: 12px; }
+  .ptabs { gap: 14px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+  .ptabs .cur { color: var(--text); box-shadow: 0 9px 0 -7px var(--text); }
+  .pnote { padding: 9px 12px; color: var(--text-2); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cap { font-size: 11px; color: var(--text-3); padding: 5px 10px 0; }
+  ul { margin: 6px 0 0; padding-left: 18px; color: var(--text-2); }
+  li { margin: 3px 0; } b { color: var(--text); font-weight: 600; }
+  .chatarea { position: relative; height: 92px; padding: 12px; color: var(--text-2); }
+  .float { position: absolute; left: 8px; top: 8px; background: var(--surface-3); border: 1px solid var(--border-strong); border-radius: 7px; }
+  .menu { margin: 12px 12px 0; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 10px; padding: 6px 10px; font-size: 12px; }
+  .menu .row { gap: 8px; height: 24px; }
+  @media (max-width: 620px) { .two { grid-template-columns: 1fr; } .hide-s { display: none; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></symbol>
+  <symbol id="chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></symbol>
+  <symbol id="code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></symbol>
+  <symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+</svg>
+
+<main>
+<h1>Where the terminal button sits in chat</h1>
+<p>Today it is squeezed between the context ring and the model chip, right beside Send. Four other places. Blue outline marks the button.</p>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">P1 · Same corner as in the terminal</span><span class="pick">my pick</span></div>
+  <div class="frame"><div class="row topbar">
+      <div class="row tab"><i class="mark"></i><span>picker test 2</span></div>
+      <div class="row tools"><svg class="i"><use href="#plus"/></svg><svg class="i hide-s"><use href="#code"/></svg><svg class="i"><use href="#play"/></svg><span class="pill">Orchestrator</span></div>
+    </div>
+    <div class="chatarea"><span class="float"><span class="btn hl" title="Switch to terminal"><svg class="i"><use href="#term"/></svg></span></span><div style="text-align:center;padding-top:26px">ready.</div></div>
+    <div class="composer"><div style="padding:9px 10px" class="muted">Message the agent…</div>
+      <div class="row bar"><svg class="i"><use href="#plus"/></svg><span class="row muted" style="gap:4px"><svg class="i"><use href="#shield"/></svg><span class="hide-s">Bypass permissions</span></span>
+        <span class="row chip" style="margin-left:auto"><i class="mark"></i>GPT-6.1-Sol <span class="muted">Ultra</span></span><span class="row send"><svg class="i"><use href="#up"/></svg></span></div></div>
+  </div>
+  <p class="why">Floats at the top-left of the chat, exactly where the chat button floats in the terminal. The button never moves when you flip views, and the chat box holds only message controls.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">P2 · Left side of the chat box, after permissions</span></div>
+  <div class="frame"><div class="composer"><div style="padding:9px 10px" class="muted">Message the agent…</div>
+      <div class="row bar"><svg class="i"><use href="#plus"/></svg><span class="row muted" style="gap:4px"><svg class="i"><use href="#shield"/></svg><span class="hide-s">Bypass permissions</span></span><span class="btn hl" title="Switch to terminal"><svg class="i"><use href="#term"/></svg></span>
+        <span class="row chip" style="margin-left:auto"><i class="mark"></i>GPT-6.1-Sol <span class="muted">Ultra</span></span><span class="row send"><svg class="i"><use href="#up"/></svg></span></div></div></div>
+  <p class="why">Stays in the chat box but away from the model chip and Send. Sits with the other "how this session runs" controls.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">P3 · A row in the + menu</span></div>
+  <div class="frame">
+    <div class="menu"><div class="row muted">Files</div><div class="row muted">Plan mode</div><div class="row muted">Fast mode</div>
+      <div class="row" style="outline:1.5px solid var(--accent);border-radius:5px;padding:0 4px;margin:0 -4px"><svg class="i"><use href="#term"/></svg>Terminal view</div></div>
+    <div class="composer"><div style="padding:9px 10px" class="muted">Message the agent…</div>
+      <div class="row bar"><svg class="i"><use href="#plus"/></svg><span class="row muted" style="gap:4px"><svg class="i"><use href="#shield"/></svg><span class="hide-s">Bypass permissions</span></span>
+        <span class="row chip" style="margin-left:auto"><i class="mark"></i>GPT-6.1-Sol <span class="muted">Ultra</span></span><span class="row send"><svg class="i"><use href="#up"/></svg></span></div></div>
+  </div>
+  <p class="why">No extra icon anywhere. Costs two clicks, and it is the least discoverable.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">P4 · Top bar tools</span></div>
+  <div class="frame"><div class="row topbar">
+      <div class="row tab"><i class="mark"></i><span>picker test 2</span></div>
+      <div class="row tools"><span class="btn hl" title="Switch to terminal"><svg class="i"><use href="#term"/></svg></span><svg class="i"><use href="#plus"/></svg><svg class="i hide-s"><use href="#code"/></svg><svg class="i"><use href="#play"/></svg><span class="pill">Orchestrator</span></div>
+    </div></div>
+  <p class="why">Always visible and far from Send, but that row is already busy, and in the terminal the button would be in a different place.</p>
+</div>
+
+<h2>Why P1</h2>
+<ul>
+  <li><b>One spot for both views:</b> the terminal already has its controls floating at the top-left, so the switch back is under the pointer.</li>
+  <li><b>Safer:</b> nothing new next to Send.</li>
+  <li><b>Trade-off:</b> on a narrow window it floats over the top of the transcript, see-through like the terminal ones.</li>
+</ul>
+</main>
+</body>
+</html>

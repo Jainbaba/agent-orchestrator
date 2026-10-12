@@ -6,6 +6,7 @@
 //   message.updated / message.part.updated -> `ao hooks opencode user-prompt-submit`
 //   tool.execute.before / tool.execute.after -> `ao hooks opencode active`
 //   session.status (status.type == idle)   -> `ao hooks opencode stop`
+//                                             (carries the turn's final assistant text)
 //   permission.asked / question.asked      -> `ao hooks opencode permission-blocked`
 //   permission/question reply or rejection -> `ao hooks opencode active`
 //
@@ -38,6 +39,12 @@ export const aoActivity: Plugin = async ({ directory, client }) => {
   // trimmed by the host runtime.
   const launchID: string = (process.env.AO_RUNTIME_LAUNCH_ID ?? "").trim()
   const messageStore = new Map<string, any>()
+  // Assistant message ids seen this turn, and the text of the assistant text
+  // part updated most recently. Text parts stream, so the last update of the
+  // last part is the turn's final message; `stop` reports it so AO can keep
+  // the turn's response alongside its request.
+  const assistantMessages = new Set<string>()
+  let lastAssistantText = ""
 
   // Resolve AO through Bun so the same command works on Unix and Windows. A
   // missing binary remains a silent no-op rather than a per-event error.
@@ -98,6 +105,8 @@ export const aoActivity: Plugin = async ({ directory, client }) => {
     if (currentSessionID === sessionID) return false
     promptReports.clear()
     messageStore.clear()
+    assistantMessages.clear()
+    lastAssistantText = ""
     currentModel = null
     currentSessionID = sessionID
     return true
@@ -138,6 +147,7 @@ export const aoActivity: Plugin = async ({ directory, client }) => {
               callHookSync("session-start", { session_id: msg.sessionID })
             }
             if (msg.role === "assistant" && msg.modelID) currentModel = msg.modelID
+            if (msg.role === "assistant" && msg.id) assistantMessages.add(msg.id)
             // Fallback: some `opencode run` flows never deliver message.part.updated
             // for the prompt, so start the turn from the user message itself.
             if (msg.role === "user") {
@@ -157,6 +167,15 @@ export const aoActivity: Plugin = async ({ directory, client }) => {
               const prompt = part.text ?? ""
               if (sessionID) reportUserPrompt(sessionID, msg.id, prompt)
               if (prompt.length > 0) messageStore.delete(part.messageID)
+            } else if (
+              assistantMessages.has(part.messageID) &&
+              part.type === "text" &&
+              !part.synthetic &&
+              !part.ignored &&
+              typeof part.text === "string" &&
+              part.text.trim().length > 0
+            ) {
+              lastAssistantText = part.text
             }
             break
           }
@@ -171,7 +190,15 @@ export const aoActivity: Plugin = async ({ directory, client }) => {
             if (props?.status?.type !== "idle") break
             const sessionID = props?.sessionID ?? currentSessionID
             if (!sessionID) break
-            callHookSync("stop", { session_id: sessionID, model: currentModel ?? "" })
+            callHookSync("stop", {
+              session_id: sessionID,
+              model: currentModel ?? "",
+              last_assistant_message: lastAssistantText,
+            })
+            // The next turn must not repeat this one's answer if it ends
+            // without producing text of its own.
+            assistantMessages.clear()
+            lastAssistantText = ""
             break
           }
 

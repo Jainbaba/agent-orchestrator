@@ -1046,7 +1046,8 @@ describe("SessionInspector usage", () => {
 		expect(screen.queryByText("Cache write tokens")).not.toBeInTheDocument();
 		expect(screen.queryByText("Reasoning (included in output)")).not.toBeInTheDocument();
 		const agentAttribution = screen.getByText("Codex").parentElement;
-		expect(agentAttribution?.querySelector("img")).toBeInTheDocument();
+		// Codex's single-colour mark is a tinted mask, not an <img>.
+		expect(agentAttribution?.querySelector('[style*="mask"]')).toBeInTheDocument();
 		const agentDisclosure = screen.getByRole("button", { name: "Codex usage details" });
 		await userEvent.click(agentDisclosure);
 		const details = screen.getByRole("region", { name: "Codex usage peek" });
@@ -1067,7 +1068,7 @@ describe("SessionInspector usage", () => {
 
 		renderWithQuery(<SessionInspector session={session([])} />);
 		const codexDisclosure = await screen.findByRole("button", { name: "Codex usage details" });
-		expect(codexDisclosure.querySelector("img")).toBeInTheDocument();
+		expect(codexDisclosure.querySelector('[style*="mask"]')).toBeInTheDocument();
 
 		await userEvent.click(codexDisclosure);
 		const details = screen.getByRole("region", { name: "Codex usage peek" });

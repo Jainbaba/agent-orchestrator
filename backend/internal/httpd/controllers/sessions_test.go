@@ -222,7 +222,7 @@ func newFakeSessionService() *fakeSessionService {
 	now := time.Now().UTC()
 	s := domain.Session{SessionRecord: domain.SessionRecord{ID: "ao-1", ProjectID: "ao", Kind: domain.KindWorker, Activity: domain.Activity{State: domain.ActivityIdle, LastActivityAt: now}, AutoInjectReview: true, AutoInjectCI: true, CreatedAt: now, UpdatedAt: now}, Status: domain.StatusIdle, TerminalHandleID: "ao-1/terminal_0"}
 	return &fakeSessionService{
-		sessions:      map[domain.SessionID]domain.Session{s.ID: s},
+		sessions: map[domain.SessionID]domain.Session{s.ID: s},
 	}
 }
 
@@ -816,7 +816,6 @@ func TestSessionsAPI_ListWorkspaceTree(t *testing.T) {
 		})
 	}
 }
-
 
 func (f *fakeSessionService) InvalidateWorkspaceCache(_ domain.SessionID) {}
 

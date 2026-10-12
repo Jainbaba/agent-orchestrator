@@ -31,7 +31,6 @@ var aggregatedEventNames = []string{
 	"ao.cli.usage_errors",
 }
 
-
 func newTelemetrySink(cfg config.Config, store *sqlite.Store, log *slog.Logger) ports.EventSink {
 	if !cfg.Telemetry.Events {
 		return telemetryadapter.NoopSink{}

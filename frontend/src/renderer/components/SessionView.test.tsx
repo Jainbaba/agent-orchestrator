@@ -74,8 +74,7 @@ const resumeAgentPostMock = vi.hoisted(() => vi.fn());
 
 async function chooseSessionAction(name: string) {
 	const user = userEvent.setup();
-	await user.click(screen.getByRole("button", { name: "Session actions" }));
-	await user.click(await screen.findByRole("menuitem", { name }));
+	await user.click(await screen.findByRole("button", { name }));
 }
 const routeBlockerState = vi.hoisted(() => ({
 	options: undefined as
@@ -244,6 +243,7 @@ vi.mock("./chat/SessionChatSurface", async () => {
 		onOpenFile,
 		headerActions,
 		sessionTabAction,
+		interfaceSwitch,
 		tabStripAction,
 		reviewerTerminal,
 		onOpenReviewerTerminal,
@@ -266,6 +266,7 @@ vi.mock("./chat/SessionChatSurface", async () => {
 		onOpenFile?: (path: string, line?: number) => void;
 		headerActions?: ReactNode;
 		sessionTabAction?: ReactNode;
+		interfaceSwitch?: { control: ReactNode; errorNotice?: ReactNode };
 		tabStripAction?: ReactNode;
 		reviewerTerminal?: { handleId: string; harness: string };
 		onOpenReviewerTerminal?: (target: { handleId: string; harness: string }) => void;
@@ -317,6 +318,8 @@ vi.mock("./chat/SessionChatSurface", async () => {
 			</button>
 			{headerActions}
 			{sessionTabAction}
+			{interfaceSwitch?.control}
+			{interfaceSwitch?.errorNotice}
 			<div role="tablist">
 				{workspaceTabs?.map((tab) => <div key={tab.key}>{tab.content}</div>)}
 				{workspaceTabActions}
@@ -378,6 +381,10 @@ vi.mock("./chat/CloudSessionChatSurface", async (importOriginal) => ({
 			<button type="button" onClick={() => onConversationWorkChange?.({ ...chatSurfaceWorkState })}>report cloud chat work</button>
 		</div>
 	),
+}));
+// The terminal tab's menu is stood in for by the switch control it wraps.
+vi.mock("./TerminalAgentControls", () => ({
+	TerminalSessionMenu: ({ switchControl }: { switchControl?: ReactNode }) => <>{switchControl}</>,
 }));
 vi.mock("./chat/ReviewerChatSurface", () => ({
 	ReviewerChatSurface: ({ reviewId }: { reviewId: string }) => (
@@ -1986,7 +1993,7 @@ describe("SessionView", () => {
 	it.each([
 		["tui", "chat", "Switch to chat UI"],
 		["chat", "tui", "Switch to terminal UI"],
-	] as const)("keeps the Cloud %s to %s switch only in the existing session actions menu", async (mode, targetMode, action) => {
+	] as const)("shows one Cloud %s to %s switch control", async (mode, targetMode, action) => {
 		interfaceTransitionState.status = { supported: true, targetMode };
 		const session = workerSession("sess-1");
 		session.cloud = { orgId: "org-1" };
@@ -1996,9 +2003,7 @@ describe("SessionView", () => {
 
 		render(<SessionView sessionId="sess-1" />);
 
-		expect(screen.queryByRole("button", { name: action })).not.toBeInTheDocument();
-		await userEvent.click(screen.getByRole("button", { name: "Session actions" }));
-		expect(screen.getByRole("menuitem", { name: action })).toBeInTheDocument();
+		expect(screen.getAllByRole("button", { name: action })).toHaveLength(1);
 	});
 
 	it.each(["codex", "claude-code"] as const)("passes a pending Cloud %s model and effort into Chat-to-terminal handoff", async (provider) => {
@@ -2233,6 +2238,7 @@ describe("SessionView", () => {
 		cloudGateState.cloudEnabled = false;
 		interfaceTransitionState.status = { supported: true, targetMode: "chat" };
 		const session = workerSession("sess-1");
+		session.cloud = { orgId: "org-1" };
 		session.mode = "tui";
 		session.status = "idle";
 		session.activity = { state: "idle", lastActivityAt: "2026-08-06T00:00:00Z" };
@@ -3514,7 +3520,7 @@ describe("SessionView", () => {
 	it.each([
 		["worker", "sess-1"],
 		["orchestrator", "sess-orch"],
-	] as const)("removes the session actions menu for %s sessions when Chat UI is unsupported", (_label, sessionId) => {
+	] as const)("offers no interface switch for %s sessions when Chat UI is unsupported", (_label, sessionId) => {
 		interfaceTransitionState.status = { supported: false, targetMode: "chat", reasonCode: "CHAT_UNSUPPORTED" };
 		const session = workerSession(sessionId);
 		session.mode = "tui";
@@ -3523,14 +3529,13 @@ describe("SessionView", () => {
 
 		render(<SessionView sessionId={sessionId} />);
 
-		// Nothing in the menu applies, so it must not render as an empty dropdown.
-		expect(screen.queryByRole("button", { name: "Session actions" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Switch to chat UI" })).not.toBeInTheDocument();
 	});
 
 	it.each([
 		["before its status loads", undefined, false],
 		["once terminated", { supported: false, targetMode: "chat", reasonCode: "SESSION_TERMINATED" }, true],
-	] as const)("removes the session actions menu for a harness outside the Chat list %s", (_label, status, terminated) => {
+	] as const)("offers no interface switch for a harness outside the Chat list %s", (_label, status, terminated) => {
 		settingsState.chatHarnesses = ["claude-code", "codex"];
 		interfaceTransitionState.status = status;
 		const session = workerSession("sess-1");
@@ -3540,10 +3545,10 @@ describe("SessionView", () => {
 
 		render(<SessionView sessionId="sess-1" />);
 
-		expect(screen.queryByRole("button", { name: "Session actions" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Switch to chat UI" })).not.toBeInTheDocument();
 	});
 
-	it("keeps the session actions menu for a harness in the Chat list", async () => {
+	it("offers the interface switch for a harness in the Chat list", async () => {
 		settingsState.chatHarnesses = ["claude-code", "codex", "opencode"];
 		interfaceTransitionState.status = { supported: true, targetMode: "chat" };
 		const session = workerSession("sess-1");
@@ -3552,8 +3557,7 @@ describe("SessionView", () => {
 
 		render(<SessionView sessionId="sess-1" />);
 
-		await userEvent.click(screen.getByRole("button", { name: "Session actions" }));
-		expect(screen.getByRole("menuitem", { name: "Switch to chat UI" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Switch to chat UI" })).toBeInTheDocument();
 	});
 
 	it("shows the switch button when the adapter only reports a generic unsupported reason", async () => {
@@ -3565,12 +3569,8 @@ describe("SessionView", () => {
 
 		render(<SessionView sessionId="sess-1" />);
 
-		await userEvent.click(screen.getByRole("button", { name: "Session actions" }));
-		expect(screen.getByRole("menuitem", { name: "Switch to chat UI" })).toBeInTheDocument();
-		expect(screen.getByRole("menuitem", { name: "Switch to chat UI" })).toHaveAttribute(
-			"title",
-			"This agent can't switch a running terminal session to chat. Start a new chat session instead.",
-		);
+		// An unsupported switch stays visible but disabled, with the reason as its tooltip.
+		expect(screen.getByRole("button", { name: "Switch to chat UI" })).toBeDisabled();
 	});
 
 	it("walks backward through auxiliary terminals before returning to the permanent terminal", () => {

@@ -8,13 +8,14 @@
  */
 
 import { AlertTriangle, Loader2 } from "lucide-react";
-import { memo, useEffect, useRef, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
 	useConversation,
 	useConversationCommands,
 	useConversationConfigOptions,
 	useConversationModels,
 	useConversationSkills,
+	useProviderSwitchCommand,
 	useStageAttachments,
 	useWorkspaceFilePaths,
 } from "../../hooks/useConversation";
@@ -29,6 +30,9 @@ import { can } from "../../types/conversation";
 import type { ConversationSnapshot } from "../../types/conversation";
 import type { TerminalTarget } from "../../types/terminal";
 import type { WorkspaceSession } from "../../types/workspace";
+import { ComposerErrorNotice, PendingAgentSwitchNotice, type PendingAgentSwitch } from "./AgentSwitchPicker";
+import { apiErrorMessage } from "../../lib/api-client";
+import { AGENT_SWITCH_FAILED } from "./ChatComposer";
 import { ChatWorkspace } from "./ChatWorkspace";
 import { hasProviderPermissionMode } from "./TurnSettingsBar";
 
@@ -107,7 +111,10 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 	controllerResumeError,
 	newWorkDisabled,
 	onConversationWorkChange,
+	interfaceSwitch,
 }: {
+	/** The control that moves this session to the terminal view, and its error. */
+	interfaceSwitch?: { control: ReactNode; errorNotice?: ReactNode };
 	session: WorkspaceSession;
 	/** Owning daemon for a remote session; omitted for the local daemon. */
 	hostId?: string;
@@ -188,6 +195,27 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 		snapshot?.controller?.state === "busy" || commands.busy || acceptedLocalWorkPending;
 	const hasRunningTurn = Boolean(snapshot?.turns.some((turn) => turn.state === "running"));
 	const queuedTurnCount = snapshot?.turns.filter((turn) => turn.state === "queued").length ?? 0;
+	// Choosing another agent only records the choice. The switch runs with the
+	// next message, so the handoff note is written when it is needed.
+	const providerSwitch = useProviderSwitchCommand(session.id, hostId);
+	const [chosenSwitch, setChosenSwitch] = useState<{ sessionId: string; target: PendingAgentSwitch }>();
+	const currentHarness = snapshot?.harness;
+	const pendingSwitch =
+		chosenSwitch?.sessionId === session.id && currentHarness && chosenSwitch.target.harness !== currentHarness
+			? chosenSwitch.target
+			: undefined;
+	const switchBlocked = controllerBusy || hasRunningTurn || queuedTurnCount > 0 || providerSwitch.switchProviderPending;
+	const agentSwitch = useMemo(
+		() => currentHarness && !session.cloud && !newWorkDisabled ? {
+			projectId: session.workspaceId,
+			hostId,
+			pending: pendingSwitch,
+			onPendingChange: (target: PendingAgentSwitch | undefined) =>
+				setChosenSwitch(target ? { sessionId: session.id, target } : undefined),
+			disabled: switchBlocked,
+		} : undefined,
+		[currentHarness, hostId, newWorkDisabled, pendingSwitch, session.cloud, session.id, session.workspaceId, switchBlocked],
+	);
 	useEffect(() => {
 		if (acceptedLocalTurnObserved && pendingAcceptedTurnId) {
 			acknowledgeAcceptedTurn(pendingAcceptedTurnId);
@@ -393,9 +421,28 @@ export const SessionChatSurface = memo(function SessionChatSurface({
 				loadingOlder={isLoadingOlder}
 				onLoadOlder={loadOlder}
 				busy={commands.busy}
-				onSend={(text, attachments, clientMessageId) =>
-					commands.send({ text, attachments, clientMessageId })}
+				onSend={async (text, attachments, clientMessageId) => {
+					if (pendingSwitch) {
+						// Nothing was sent if the switch fails, so the draft must stay editable
+						// instead of being held as a delivery that might have gone through.
+						await providerSwitch.switchProvider(pendingSwitch.harness, pendingSwitch.model, pendingSwitch.effort, pendingSwitch.fastMode)
+							.catch((error) => { throw Object.assign(new Error(apiErrorMessage(error)), { code: AGENT_SWITCH_FAILED }); });
+						setChosenSwitch(undefined);
+					}
+					return commands.send({ text, attachments, clientMessageId });
+				}}
 				commandError={commands.error}
+				agentSwitch={agentSwitch}
+				composerAction={interfaceSwitch?.control}
+				composerNotice={interfaceSwitch?.errorNotice ?? (providerSwitch.switchProviderError ? (
+					<ComposerErrorNotice title="Couldn't switch agent" message={providerSwitch.switchProviderError} onDismiss={providerSwitch.resetSwitchProviderError} />
+				) : pendingSwitch ? (
+					<PendingAgentSwitchNotice
+						pending={pendingSwitch}
+						switching={providerSwitch.switchProviderPending}
+						onCancel={() => setChosenSwitch(undefined)}
+					/>
+				) : undefined)}
 				onDecide={commands.resolve}
 				onResolveInput={commands.resolveInput}
 				onInterrupt={commands.interrupt}

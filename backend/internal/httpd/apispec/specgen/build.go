@@ -199,6 +199,9 @@ var schemaNames = map[string]string{ //nolint:gosec // Public OpenAPI type names
 	"ControllersProviderSwitchRequest":                     "ProviderSwitchRequest",
 	"ControllersProviderSwitchResponse":                    "ProviderSwitchResponse",
 	"ControllersProviderSwitchCapabilityResponse":          "ProviderSwitchCapabilityResponse",
+	"ControllersSessionHistoryQuery":                       "SessionHistoryQuery",
+	"ControllersSessionHistoryTurn":                        "SessionHistoryTurn",
+	"ControllersSessionHistoryResponse":                    "SessionHistoryResponse",
 	"ControllersRollbackConversationResponse":              "RollbackConversationResponse",
 	"ControllersRetryTurnResponse":                         "RetryTurnResponse",
 	"ControllersSetConversationTitleRequest":               "SetConversationTitleRequest",
@@ -951,6 +954,18 @@ func shellTerminalOperations() []operation {
 			pathParams: []any{controllers.SessionIDParam{}, controllers.ProviderSwitchTargetParam{}},
 			resps: []respUnit{
 				{http.StatusOK, controllers.ProviderSwitchCapabilityResponse{}},
+				{http.StatusNotFound, envelope.APIError{}},
+				{http.StatusInternalServerError, envelope.APIError{}},
+				{http.StatusNotImplemented, envelope.APIError{}},
+			},
+		},
+		{
+			method: http.MethodGet, path: "/api/v1/sessions/{sessionId}/history", id: "getSessionHistory", tag: "conversations",
+			summary:    "Read a session's turns, newest first, across Chat and Terminal",
+			pathParams: []any{controllers.SessionIDParam{}, controllers.SessionHistoryQuery{}},
+			resps: []respUnit{
+				{http.StatusOK, controllers.SessionHistoryResponse{}},
+				{http.StatusBadRequest, envelope.APIError{}},
 				{http.StatusNotFound, envelope.APIError{}},
 				{http.StatusInternalServerError, envelope.APIError{}},
 				{http.StatusNotImplemented, envelope.APIError{}},

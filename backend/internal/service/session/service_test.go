@@ -147,7 +147,6 @@ func TestTaskPreparationsStayOutOfSessionReads(t *testing.T) {
 	}
 }
 
-
 func newWorkspaceRepo(t testing.TB) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -493,7 +492,6 @@ func TestSessionListAppliesActivityBeforePRFacts(t *testing.T) {
 		})
 	}
 }
-
 
 func TestSessionRenameUpdatesDisplayName(t *testing.T) {
 	st := newFakeStore()
@@ -3674,7 +3672,6 @@ func TestToSpawnAPIErrorIsIdempotentForMappedErrors(t *testing.T) {
 		t.Fatalf("codes = %q / %q, want RUNTIME_CREATE_FAILED", firstErr.Code, secondErr.Code)
 	}
 }
-
 
 func TestToAPIErrorDefaultsUnownedErrorsToHTTP(t *testing.T) {
 	mapped := toAPIError(errors.New("pre-admission storage unavailable"))

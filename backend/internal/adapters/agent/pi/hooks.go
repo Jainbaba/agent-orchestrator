@@ -150,21 +150,51 @@ function sessionID(ctx: any): string {
   return ctx.sessionManager.getSessionId() ?? "";
 }
 
+// The run's final assistant text, read defensively: the event shape belongs to
+// the agent, and a missing or different field must only mean "no text".
+function finalAssistantText(event) {
+  try {
+    const messages = Array.isArray(event?.messages) ? event.messages : [];
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index];
+      if (message?.role !== "assistant") continue;
+      const content = message.content;
+      const text = typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content
+              .filter((part) => part?.type === "text" && typeof part.text === "string")
+              .map((part) => part.text)
+              .join("\n")
+          : "";
+      if (text.trim()) return text;
+    }
+  } catch {
+    // An unreadable event carries no text.
+  }
+  return "";
+}
+
 export default function (pi: ExtensionAPI) {
+  // The final message of the current run. Stop may fire from a later event
+  // than the one that carries the messages, so it is kept until then.
+  let lastAssistantText = "";
   pi.on("session_start", async (_event, ctx) => {
     callHookSync("session-start", { session_id: sessionID(ctx) });
   });
   pi.on("before_agent_start", async (event, ctx) => {
+    lastAssistantText = "";
     callHookSync("user-prompt-submit", { session_id: sessionID(ctx), prompt: event.prompt });
   });
   // agent_end is the completion event in Pi 0.80.x. Newer releases may retry,
   // compact, or queue follow-up work after it; a subsequent start immediately
   // reactivates AO, while agent_settled below confirms the final idle state.
-  pi.on("agent_end", async (_event, ctx) => {
-	    if (!AGENT_SETTLED_SUPPORTED) callHookSync("stop", { session_id: sessionID(ctx) });
+  pi.on("agent_end", async (event, ctx) => {
+	    lastAssistantText = finalAssistantText(event) || lastAssistantText;
+	    if (!AGENT_SETTLED_SUPPORTED) callHookSync("stop", { session_id: sessionID(ctx), last_assistant_message: lastAssistantText });
   });
   pi.on("agent_settled", async (_event, ctx) => {
-	    if (AGENT_SETTLED_SUPPORTED) callHookSync("stop", { session_id: sessionID(ctx) });
+	    if (AGENT_SETTLED_SUPPORTED) callHookSync("stop", { session_id: sessionID(ctx), last_assistant_message: lastAssistantText });
   });
   pi.on("session_shutdown", async (event, ctx) => {
 	    if (event.reason === "quit") {

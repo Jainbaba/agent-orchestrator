@@ -100,8 +100,6 @@ type preparedChatSpawnStore interface {
 	) error
 }
 
-
-
 // notificationSink is the optional lifecycle-to-notification-producer boundary.
 type notificationSink interface {
 	Notify(ctx context.Context, intent ports.NotificationIntent) error
@@ -530,6 +528,8 @@ func (m *Manager) ApplyActivitySignal(ctx context.Context, id domain.SessionID, 
 		s.TranscriptPath = ""
 		s.LatestUserPrompt = ""
 		s.LatestAssistantUpdate = ""
+		s.FinalAssistantMessage = ""
+		s.TurnUserRequest = ""
 		s.ProviderTurnID = ""
 	}
 	if !s.ConversationCheckpointOrigin.Valid() {
@@ -571,6 +571,7 @@ func (m *Manager) ApplyActivitySignal(ctx context.Context, id domain.SessionID, 
 		}
 	}
 	projectionAttempts := 0
+	terminalTurnRecorded := false
 	originalSignal := s
 retryProjection:
 	s = originalSignal
@@ -637,6 +638,12 @@ retryProjection:
 	if s.ExpectedRevision != nil && rec.Revision != *s.ExpectedRevision {
 		m.mu.Unlock()
 		return nil
+	}
+	// Every ownership fence has accepted the signal. A revision retry reduces
+	// the same signal again, so the turn is recorded once.
+	if !terminalTurnRecorded && mode == domain.SessionModeTUI {
+		terminalTurnRecorded = true
+		m.recordTerminalTurn(ctx, rec, s, now)
 	}
 	// Conversation text is meaningful only inside one provider identity, owner
 	// generation, and main turn. Reduce it as one durable state machine so a Stop
@@ -995,8 +1002,6 @@ retryProjection:
 	m.resolveNotifications(ctx, resolutions...)
 	return nil
 }
-
-
 
 // toolFlight tracks one session's in-flight tool executions and the pending
 // permission dialog's identity, so a sticky `blocked` is cleared by the post
@@ -1596,9 +1601,6 @@ func (m *Manager) changeControllerEpoch(
 	m.resolveNotifications(ctx, resolutions...)
 	return true, nil
 }
-
-
-
 
 // MarkTerminated marks a session terminated. Runtime/workspace teardown is the
 // caller's responsibility (see session_manager.Manager.Kill); this also reaps the

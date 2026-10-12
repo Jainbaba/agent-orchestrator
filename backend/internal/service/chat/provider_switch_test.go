@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -22,6 +23,18 @@ func TestProviderSwitchPublishesApproximateBranchAndIsIdempotent(t *testing.T) {
 	h.awaitSnapshot(t, func(snapshot store.ConversationSnapshot) bool {
 		return len(snapshot.Messages) == 2
 	})
+
+	// A turn this session had in the Terminal UI lives in the terminal turn
+	// table. The note is built from both stores, merged by time.
+	earlier := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) // before the harness clock
+	if err := h.st.RecordTerminalTurnRequest(ctx, domain.TerminalTurn{
+		SessionID: testSession, Harness: domain.HarnessCodex, UserRequest: "terminal ask", RequestedAt: earlier,
+	}); err != nil {
+		t.Fatalf("record terminal request: %v", err)
+	}
+	if err := h.st.RecordTerminalTurnResponse(ctx, testSession, "terminal answer", earlier.Add(time.Minute)); err != nil {
+		t.Fatalf("record terminal response: %v", err)
+	}
 
 	first, err := h.svc.SwitchProvider(ctx, testSession, domain.ProviderSwitchRequest{
 		TargetHarness:  domain.HarnessClaudeCode,
@@ -46,6 +59,19 @@ func TestProviderSwitchPublishesApproximateBranchAndIsIdempotent(t *testing.T) {
 	driver.mu.Unlock()
 	if !strings.Contains(targetConfig.SystemPrompt, "keep this context") {
 		t.Fatalf("target system prompt did not contain AO handoff context: %q", targetConfig.SystemPrompt)
+	}
+	for _, want := range []string{domain.HandoffNotePrefix, "terminal ask", "terminal answer", "## Latest turn"} {
+		if !strings.Contains(targetConfig.SystemPrompt, want) {
+			t.Fatalf("target handoff note is missing %q: %q", want, targetConfig.SystemPrompt)
+		}
+	}
+	if strings.Index(targetConfig.SystemPrompt, "terminal ask") > strings.Index(targetConfig.SystemPrompt, "keep this context") {
+		t.Fatalf("the older terminal turn must come before the latest chat turn: %q", targetConfig.SystemPrompt)
+	}
+	history, total, err := h.svc.SessionHistory(ctx, testSession, 0, 10)
+	if err != nil || total != 2 || len(history) != 2 ||
+		history[0].UserRequest != "keep this context" || history[1].UserRequest != "terminal ask" {
+		t.Fatalf("session history = %+v (total %d), %v; want the chat turn then the terminal turn", history, total, err)
 	}
 
 	retry, err := h.svc.SwitchProvider(ctx, testSession, domain.ProviderSwitchRequest{
@@ -72,6 +98,9 @@ func TestProviderSwitchPublishesApproximateBranchAndIsIdempotent(t *testing.T) {
 	}
 	if snapshot.ActiveBranch.ID != first.BranchID {
 		t.Fatalf("active branch = %q, want %q", snapshot.ActiveBranch.ID, first.BranchID)
+	}
+	if !strings.Contains(snapshot.ActiveBranch.HandoffNote, "keep this context") {
+		t.Fatalf("the handoff note was not stored with the new branch: %q", snapshot.ActiveBranch.HandoffNote)
 	}
 	if snapshot.ActiveBranch.Strategy != domain.ConversationBranchStrategyApproximateContext {
 		t.Fatalf("branch strategy = %q, want approximate_context", snapshot.ActiveBranch.Strategy)

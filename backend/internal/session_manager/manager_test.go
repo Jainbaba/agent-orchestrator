@@ -4262,6 +4262,28 @@ func TestRestore_RefreshesModelFromSessionMetadata(t *testing.T) {
 	}
 }
 
+// The effort picked with a session's model must reach the agent on a rebuild
+// for every harness. It used to be applied for Claude Code only, so a terminal
+// switch to Codex started on the project's default effort.
+func TestRestore_KeepsSessionEffortForAnyHarness(t *testing.T) {
+	st := newFakeStore()
+	st.projects["mer"] = domain.ProjectRecord{ID: "mer", Config: domain.ProjectConfig{AgentConfig: domain.AgentConfig{Effort: "medium"}}}
+	seedTerminal(st, "mer-1", domain.SessionMetadata{WorkspacePath: "/ws/mer-1", Branch: "b", AgentSessionID: "agent-x", Effort: "high"})
+	rec := st.sessions["mer-1"]
+	rec.Harness = domain.HarnessCodex
+	st.sessions["mer-1"] = rec
+	agent := &recordingAgent{}
+	lookPath := func(string) (string, error) { return "/bin/true", nil }
+	m := New(Deps{Runtime: &fakeRuntime{}, Agents: singleAgent{agent: agent}, Workspace: &fakeWorkspace{}, Store: st, Messenger: &fakeMessenger{}, Lifecycle: &fakeLCM{store: st}, LookPath: lookPath})
+
+	if _, err := m.RestoreWithMode(ctx, "mer-1"); err != nil {
+		t.Fatalf("RestoreWithMode: %v", err)
+	}
+	if agent.lastConfig.Effort != "high" {
+		t.Fatalf("restore config effort = %q, want the session's own choice high", agent.lastConfig.Effort)
+	}
+}
+
 // TestPersistChatModel is the regression for the ChatUI-side half of #4893. The
 // manager must record a model the user picked in ChatUI onto the session's
 // durable metadata before the next prompt routes, and a model-only write must

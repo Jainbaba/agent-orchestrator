@@ -13,30 +13,20 @@ import (
 
 // ProviderSwitchError is a stable, user-facing refusal from the provider
 // switch admission gate. The wrapped cause is retained for logs and tests.
-type ProviderSwitchError struct {
-	Kind   domain.ProviderSwitchRefusalKind
-	Detail string
-	Cause  error
-}
-
-func (e *ProviderSwitchError) Error() string {
-	if e.Detail != "" {
-		return e.Detail
-	}
-	return string(e.Kind)
-}
-
-func (e *ProviderSwitchError) Unwrap() error { return e.Cause }
+type ProviderSwitchError = domain.ProviderSwitchError
 
 // ProviderSwitchResult is the durable identity returned after target
 // publication. The bootstrap itself is deliberately never returned over HTTP.
-type ProviderSwitchResult struct {
-	SessionID            domain.SessionID
-	ConversationID       string
-	BranchID             string
-	SourceHarness        domain.AgentHarness
-	TargetHarness        domain.AgentHarness
-	ProviderConversation string
+type ProviderSwitchResult = domain.ProviderSwitchResult
+
+// TerminalProviderSwitcher is late-bound during daemon construction.
+type TerminalProviderSwitcher interface {
+	SwitchTUIProvider(context.Context, domain.SessionID, domain.ProviderSwitchRequest) (domain.ProviderSwitchResult, error)
+	TUIProviderSwitchCapabilities(context.Context, domain.SessionID, domain.AgentHarness) (domain.ProviderSwitchCapability, error)
+}
+
+func (s *Service) SetTerminalProviderSwitcher(switcher TerminalProviderSwitcher) {
+	s.terminalSwitcher = switcher
 }
 
 type providerSwitchSessionWriter interface {
@@ -51,7 +41,13 @@ type providerSwitchActivityDetail struct {
 	Event         string              `json:"event"`
 	SourceHarness domain.AgentHarness `json:"sourceHarness"`
 	TargetHarness domain.AgentHarness `json:"targetHarness"`
-	BranchID      string              `json:"branchId"`
+	// The models and efforts on each side, where AO knows them. A side that
+	// ran on its agent's default has none recorded.
+	SourceModel  string `json:"sourceModel,omitempty"`
+	SourceEffort string `json:"sourceEffort,omitempty"`
+	TargetModel  string `json:"targetModel,omitempty"`
+	TargetEffort string `json:"targetEffort,omitempty"`
+	BranchID     string `json:"branchId"`
 }
 
 // SwitchProvider performs an idle-only Chat-to-Chat handoff. It retains the
@@ -64,6 +60,18 @@ func (s *Service) SwitchProvider(
 ) (ProviderSwitchResult, error) {
 	if request.TargetHarness == "" {
 		return ProviderSwitchResult{}, &ProviderSwitchError{Kind: domain.ProviderSwitchRefusalUnsupported, Detail: "target provider is required"}
+	}
+	if record, found, err := s.sessions.GetSession(ctx, id); err != nil {
+		return ProviderSwitchResult{}, err
+	} else if found && domain.NormalizeSessionMode(record.Mode) == domain.SessionModeTUI && s.terminalSwitcher != nil {
+		// One builder serves both UIs. A note that cannot be built must not
+		// block the switch: the terminal switcher falls back to its own.
+		note, noteErr := s.HandoffNote(ctx, record, request.TargetHarness, strings.TrimSpace(request.IdempotencyKey))
+		if noteErr != nil {
+			s.log.Warn("build terminal handoff note", "session", id, "error", noteErr)
+		}
+		request.HandoffNote = note
+		return s.terminalSwitcher.SwitchTUIProvider(ctx, id, request)
 	}
 	record, err := s.requireChatSession(ctx, id)
 	if err != nil {
@@ -144,11 +152,11 @@ func (s *Service) SwitchProvider(
 	} else if pending {
 		return ProviderSwitchResult{}, &ProviderSwitchError{Kind: domain.ProviderSwitchRefusalPendingInteraction, Detail: "answer the pending provider interaction before switching"}
 	}
-	contextMaterial, err := s.ProviderHandoffContext(ctx, id)
+	handoffNote, err := s.HandoffNote(ctx, record, request.TargetHarness, strings.TrimSpace(request.IdempotencyKey))
 	if err != nil {
 		return ProviderSwitchResult{}, err
 	}
-	if contextMaterial.Bootstrap == "" || len([]rune(contextMaterial.Bootstrap)) > domain.ProviderSwitchMaxBootstrapChars {
+	if handoffNote == "" || len([]rune(handoffNote)) > domain.ProviderSwitchMaxBootstrapChars {
 		return ProviderSwitchResult{}, &ProviderSwitchError{Kind: domain.ProviderSwitchRefusalBootstrapTooLarge, Detail: "handoff context exceeds the provider budget"}
 	}
 	if err := source.BeginIdleBranchHandoff(ctx); err != nil {
@@ -171,6 +179,13 @@ func (s *Service) SwitchProvider(
 	if err != nil {
 		return ProviderSwitchResult{}, err
 	}
+	// What the outgoing provider was set to, for the handoff marker. Read before
+	// it is stopped; a provider left on its default has neither.
+	sourceSettings := source.Settings()
+	sourceModel, sourceEffort := sourceSettings.Model, sourceSettings.ReasoningEffort
+	if sourceModel == "" {
+		sourceModel, sourceEffort = record.Metadata.Model, record.Metadata.Effort
+	}
 	sourceDriver, err := s.drivers.Driver(source.harness)
 	if err != nil {
 		return ProviderSwitchResult{}, err
@@ -184,6 +199,9 @@ func (s *Service) SwitchProvider(
 	targetCfg := cloneStartConfig(startCfg)
 	targetCfg.Harness = request.TargetHarness
 	targetCfg.ProviderConversationID = ""
+	// The source may have been rejoined after a daemon restart. The target is a
+	// new provider with no host to rejoin, so it must be allowed to start one.
+	targetCfg.ReconnectOnly = false
 	targetCfg.ProviderScopeID = ""
 	targetCfg.ProviderHandoff = nil
 	targetCfg.ProviderSwitch = &domain.ChatProviderSwitch{
@@ -195,10 +213,10 @@ func (s *Service) SwitchProvider(
 		SourceBranchID:   activeBranch.ID,
 		SourceSequence:   conversation.LatestSequence,
 		SourceGeneration: record.Metadata.ControllerGeneration,
-		Bootstrap:        contextMaterial.Bootstrap,
+		Bootstrap:        handoffNote,
 	}
-	targetCfg.Model = ""
-	targetCfg.Effort = ""
+	targetCfg.Model = request.Model
+	targetCfg.Effort = request.Effort
 	targetCfg.Permissions = ports.PermissionModeAuto
 	targetCfg.ControllerReady = func(started StartResult) (ControllerCommit, error) {
 		if started.ProviderBoundary == nil {
@@ -211,12 +229,14 @@ func (s *Service) SwitchProvider(
 		targetRecord.Activity = domain.Activity{State: domain.ActivityIdle, LastActivityAt: s.now()}
 		targetRecord.Metadata.ProviderConversationID = started.ProviderConversationID
 		targetRecord.Metadata.ControllerGeneration = started.ControllerGeneration
-		targetRecord.Metadata.Model = ""
-		targetRecord.Metadata.Effort = ""
+		targetRecord.Metadata.Model = request.Model
+		targetRecord.Metadata.Effort = request.Effort
 		targetRecord.UpdatedAt = s.now()
 		detail, _ := json.Marshal(providerSwitchActivityDetail{
 			Event: "provider_switch", SourceHarness: source.harness,
 			TargetHarness: request.TargetHarness, BranchID: started.ProviderBoundary.ID,
+			SourceModel: sourceModel, SourceEffort: sourceEffort,
+			TargetModel: request.Model, TargetEffort: request.Effort,
 		})
 		switchActivity := domain.ConversationActivity{
 			ID: started.ProviderBoundary.ID + ":provider-switch", Kind: domain.ActivityKindSystem,
@@ -226,7 +246,11 @@ func (s *Service) SwitchProvider(
 			ProviderItemID: started.ProviderBoundary.ID + ":provider-switch",
 		}
 		if committer, ok := s.store.(providerSwitchCommitter); ok {
-			if err := committer.CommitProviderSwitch(ctx, targetRecord, *started.ProviderBoundary, started.ControllerGeneration, switchActivity); err != nil {
+			// The note is stored with the branch it started, in the same
+			// transaction that publishes the switch.
+			boundary := *started.ProviderBoundary
+			boundary.HandoffNote = handoffNote
+			if err := committer.CommitProviderSwitch(ctx, targetRecord, boundary, started.ControllerGeneration, switchActivity); err != nil {
 				return ControllerCommit{}, err
 			}
 		} else {
@@ -262,6 +286,15 @@ func (s *Service) SwitchProvider(
 	}
 	source.completeBranchHandoff()
 	abortSource = false
+	if request.FastMode {
+		// Fast mode is a setting of the running controller, so it is applied to
+		// the target once it exists rather than passed through its launch.
+		settings := target.Settings()
+		settings.FastMode = true
+		if err := target.SetSettings(ctx, settings); err != nil {
+			s.log.Warn("apply fast mode after provider switch", "session", id, "error", err)
+		}
+	}
 	result := ProviderSwitchResult{
 		SessionID: id, ConversationID: conversation.ID, BranchID: target.conversation.ActiveBranchID,
 		SourceHarness: source.harness, TargetHarness: request.TargetHarness,
@@ -283,6 +316,8 @@ func (s *Service) SwitchProvider(
 	detail, _ := json.Marshal(providerSwitchActivityDetail{
 		Event: "provider_switch", SourceHarness: result.SourceHarness,
 		TargetHarness: result.TargetHarness, BranchID: result.BranchID,
+		SourceModel: sourceModel, SourceEffort: sourceEffort,
+		TargetModel: request.Model, TargetEffort: request.Effort,
 	})
 	if err := s.store.UpsertActivity(ctx, conversation.ID, "ao-provider-switch-"+result.BranchID, domain.ConversationActivity{
 		ID: result.BranchID + ":provider-switch", Kind: domain.ActivityKindSystem, Status: domain.ActivityStatusCompleted,
@@ -344,6 +379,11 @@ func (s *Service) ProviderSwitchCapabilities(
 	id domain.SessionID,
 	target domain.AgentHarness,
 ) (domain.ProviderSwitchCapability, error) {
+	if record, found, err := s.sessions.GetSession(ctx, id); err != nil {
+		return domain.ProviderSwitchCapability{}, err
+	} else if found && domain.NormalizeSessionMode(record.Mode) == domain.SessionModeTUI && s.terminalSwitcher != nil {
+		return s.terminalSwitcher.TUIProviderSwitchCapabilities(ctx, id, target)
+	}
 	record, err := s.requireChatSession(ctx, id)
 	if err != nil {
 		return domain.ProviderSwitchCapability{}, err

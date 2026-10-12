@@ -426,6 +426,13 @@ func (s *Store) CommitProviderSwitch(
 		if err := insertAndActivateConversationBranchTx(ctx, q, branch, rec.UpdatedAt); err != nil {
 			return err
 		}
+		if branch.HandoffNote != "" {
+			if err := q.SetConversationBranchHandoffNote(ctx, gen.SetConversationBranchHandoffNoteParams{
+				HandoffNote: branch.HandoffNote, ID: branch.ID,
+			}); err != nil {
+				return fmt.Errorf("store provider switch handoff note: %w", err)
+			}
+		}
 		sessionRows, err := q.ActivateConversationBranchSession(ctx, gen.ActivateConversationBranchSessionParams{
 			ProviderConversationID: branch.ProviderConversationID,
 			ControllerGeneration:   generation,
@@ -3532,6 +3539,7 @@ func conversationBranchToDomain(row gen.SelectConversationBranchRow) domain.Conv
 		ProviderIDsScoped:      row.ProviderIdsScoped != 0,
 		Active:                 row.Active,
 		CreatedAt:              row.CreatedAt,
+		HandoffNote:            row.HandoffNote,
 	}
 }
 
@@ -3554,6 +3562,7 @@ func conversationBranchListToDomain(row gen.SelectConversationBranchesRow) domai
 		ProviderIDsScoped:      row.ProviderIdsScoped != 0,
 		Active:                 row.Active,
 		CreatedAt:              row.CreatedAt,
+		HandoffNote:            row.HandoffNote,
 	}
 }
 

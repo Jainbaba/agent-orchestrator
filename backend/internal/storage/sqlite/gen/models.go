@@ -180,6 +180,7 @@ type ConversationBranch struct {
 	ProviderScopeID        string
 	ProviderIdsScoped      int64
 	ReviewID               sql.NullString
+	HandoffNote            string
 }
 
 type ConversationEditDelivery struct {
@@ -612,6 +613,17 @@ type SessionInterfaceTransitionMessage struct {
 	ClientMessageID string
 }
 
+type SessionTerminalTurn struct {
+	ID              int64
+	SessionID       string
+	Harness         string
+	NativeSessionID string
+	UserRequest     string
+	AgentResponse   string
+	RequestedAt     time.Time
+	RespondedAt     sql.NullTime
+}
+
 type SessionWorktree struct {
 	SessionID    domain.SessionID
 	RepoName     string
@@ -646,6 +658,15 @@ type TelemetryEvent struct {
 	SessionID   sql.NullString
 	RequestID   string
 	PayloadJson string
+}
+
+type TuiProviderSwitch struct {
+	ID         string
+	SessionID  string
+	RequestID  string
+	Phase      string
+	RecordJson string
+	CreatedAt  time.Time
 }
 
 type UsageBinding struct {

@@ -218,6 +218,8 @@ type AgentModelInfo struct {
 	// must render no effort control at all rather than an empty one.
 	Efforts       []string `json:"efforts,omitempty"`
 	DefaultEffort string   `json:"defaultEffort,omitempty"`
+	// SupportsFast reports that the model can run on the provider's faster tier.
+	SupportsFast bool `json:"supportsFast,omitempty"`
 }
 
 // AgentModelCatalog is AO's normalized model-picker response.

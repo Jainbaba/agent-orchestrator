@@ -69,7 +69,7 @@ type APIDeps struct {
 	Installer controllers.Installer
 	AgentAuth controllers.AgentAuthService
 	// GitHub is the local GitHub PAT + repos surface.
-	GitHub            controllers.GitHubPATService
+	GitHub controllers.GitHubPATService
 	// LinkPreview unfurls external URLs for the renderer's hover cards; nil
 	// leaves the route answering 501.
 	LinkPreview controllers.LinkPreviewService

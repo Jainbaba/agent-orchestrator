@@ -64,8 +64,8 @@ var (
 	// not an orchestrator (orchestrators are promptless by design and relaunch fresh
 	// with the system prompt only). Workers without a task and without a native
 	// session id have nothing meaningful to restore.
-	ErrNotResumable = errors.New("session: nothing to resume from")
-	ErrOperationInProgress = errors.New("session: another session operation is in progress")
+	ErrNotResumable              = errors.New("session: nothing to resume from")
+	ErrOperationInProgress       = errors.New("session: another session operation is in progress")
 	ErrControllerStopUnconfirmed = errors.New("session: controller stop could not be confirmed")
 	// ErrTargetAgentUnauthorized is returned only when the target adapter's
 	// local auth probe conclusively reports missing or invalid credentials.
@@ -339,11 +339,11 @@ type conversationSettingsStore interface {
 // Manager coordinates internal session spawn, restore, kill, and cleanup over
 // the outbound ports. User-facing read-model assembly lives in the service package.
 type Manager struct {
-	runtime   runtimeController
-	agents    ports.AgentResolver
-	workspace ports.Workspace
-	store     Store
-	agentReadiness       ports.AgentReadinessProvider
+	runtime        runtimeController
+	agents         ports.AgentResolver
+	workspace      ports.Workspace
+	store          Store
+	agentReadiness ports.AgentReadinessProvider
 	// messenger is a sessionguard.Guard wrapping the raw messenger, so every
 	// pane write is guarded (re-read state, refuse a blocked session) without
 	// each call site re-deriving the check. Send/confirmActive use Deliver for
@@ -416,12 +416,12 @@ type Manager struct {
 	agentOperations                map[domain.SessionID]agentOperationKind
 	interfaceRecoveryMu            sync.Mutex
 	deferredInterfaceRecovery      map[domain.SessionID]string
-	inputLeases      map[domain.SessionID]int
-	inputDrained     map[domain.SessionID]chan struct{}
+	inputLeases                    map[domain.SessionID]int
+	inputDrained                   map[domain.SessionID]chan struct{}
 	// backgroundContext owns deferred interface-transition recovery work.
-	backgroundContext context.Context
-	interfaceRecoveryWorkers sync.WaitGroup
-	interfaceRecoveryWorkerMu sync.Mutex
+	backgroundContext              context.Context
+	interfaceRecoveryWorkers       sync.WaitGroup
+	interfaceRecoveryWorkerMu      sync.Mutex
 	interfaceRecoveryWorkersClosed bool
 
 	transitionMu sync.Mutex
@@ -664,11 +664,11 @@ const (
 
 // Deps are the collaborators a Session Manager needs; New wires them together.
 type Deps struct {
-	Runtime         runtimeController
-	Agents          ports.AgentResolver
-	Workspace       ports.Workspace
-	Store           Store
-	Messenger       ports.AgentMessenger
+	Runtime   runtimeController
+	Agents    ports.AgentResolver
+	Workspace ports.Workspace
+	Store     Store
+	Messenger ports.AgentMessenger
 	// Defaults supplies the daemon-owned default session interface for spawns that
 	// name no mode. Nil means always use the compatibility default.
 	Defaults SessionModeDefaults
@@ -772,8 +772,8 @@ func New(d Deps) *Manager {
 		agentOperations:                make(map[domain.SessionID]agentOperationKind),
 		inputLeases:                    make(map[domain.SessionID]int),
 		inputDrained:                   make(map[domain.SessionID]chan struct{}),
-		transitions:            make(map[domain.SessionID]*interfaceTransitionRun),
-		transitionDeliveryWake: make(chan struct{}, 1),
+		transitions:                    make(map[domain.SessionID]*interfaceTransitionRun),
+		transitionDeliveryWake:         make(chan struct{}, 1),
 		sendConfirm: sendConfirmConfig{
 			pollInterval:    sendConfirmPollInterval,
 			attemptDeadline: sendConfirmAttemptDeadline,
@@ -2810,10 +2810,19 @@ func (m *Manager) relaunchSessionWithPolicy(
 	forceFresh, requireNativeHistory bool,
 	historyPolicy domain.SessionInterfaceTransitionHistoryPolicy,
 ) (RestoreResult, error) {
-	return m.relaunchSessionWithPolicyAndGeneration(ctx, operation, rec, project, ws, restartHandle, forceFresh, requireNativeHistory, "", historyPolicy)
+	return m.relaunchSessionWithPolicyAndGenerationPrompt(ctx, operation, rec, project, ws, restartHandle, forceFresh, requireNativeHistory, "", historyPolicy, nil)
 }
 
 func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, operation string, rec domain.SessionRecord, project domain.ProjectRecord, ws ports.WorkspaceInfo, restartHandle *ports.RuntimeHandle, forceFresh, requireNativeHistory bool, reservedGeneration string, historyPolicy domain.SessionInterfaceTransitionHistoryPolicy) (RestoreResult, error) {
+	return m.relaunchSessionWithPolicyAndGenerationPrompt(ctx, operation, rec, project, ws, restartHandle, forceFresh, requireNativeHistory, reservedGeneration, historyPolicy, nil)
+}
+
+// relaunchSessionWithPolicyAndGenerationPrompt is the restore path with an
+// optional one-shot prompt override. Provider handoffs use this to seed a
+// fresh target without replacing the session's durable original task prompt.
+// The override is launch-only: lifecycle metadata continues to retain the
+// user's original prompt for ordinary restore and retry behavior.
+func (m *Manager) relaunchSessionWithPolicyAndGenerationPrompt(ctx context.Context, operation string, rec domain.SessionRecord, project domain.ProjectRecord, ws ports.WorkspaceInfo, restartHandle *ports.RuntimeHandle, forceFresh, requireNativeHistory bool, reservedGeneration string, historyPolicy domain.SessionInterfaceTransitionHistoryPolicy, promptOverride *string) (RestoreResult, error) {
 	// Relaunch dispatches from the currently committed persisted mode, never from
 	// a caller hint. The interface-transition coordinator changes that fact only
 	// after stopping the old controller, then reuses this ordinary restore path.
@@ -2851,6 +2860,12 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	if model := strings.TrimSpace(rec.Metadata.Model); model != "" {
 		agentConfig.Model = model
 	}
+	// The effort chosen with that model is the same kind of choice. Without
+	// this, a terminal switch to any agent but Claude Code started on the
+	// project's default effort instead of the one picked.
+	if effort := strings.TrimSpace(rec.Metadata.Effort); effort != "" {
+		agentConfig.Effort = effort
+	}
 	if rec.Metadata.Permissions != "" {
 		agentConfig.Permissions = rec.Metadata.Permissions
 	}
@@ -2876,9 +2891,21 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 	var argv []string
 	var delivery ports.PromptDeliveryStrategy
 	var mode RestoreMode
+	launchPrompt := rec.Metadata.Prompt
+	if promptOverride != nil {
+		launchPrompt = *promptOverride
+	}
+	// A provider handoff starts a new native conversation in a session that
+	// may have run this agent before. An agent that pins its native id to the
+	// AO session (Claude Code) would be handed the id its earlier conversation
+	// already used and refuse to start, so it is given a new one.
+	freshNativeSessionID := ""
+	if provider, ok := agent.(ports.AgentFreshNativeSessionIDProvider); ok && forceFresh && promptOverride != nil {
+		freshNativeSessionID = provider.NewNativeSessionID()
+	}
 	if forceFresh {
-		argv, delivery, mode, err = freshLaunchArgv(ctx, agent, rec.ID, ws.Path, rec.Metadata,
-			systemPrompt, systemPromptFile, agentConfig, rec.Kind, m.dataDir, true)
+		argv, delivery, mode, err = freshLaunchArgvWithPrompt(ctx, agent, rec.ID, ws.Path, rec.Metadata,
+			systemPrompt, systemPromptFile, agentConfig, rec.Kind, m.dataDir, true, launchPrompt, freshNativeSessionID)
 	} else {
 		argv, delivery, mode, err = restoreArgv(ctx, agent, rec.ID, ws.Path, rec.Metadata,
 			systemPrompt, systemPromptFile, agentConfig, rec.Kind, rec.Harness, m.dataDir, env)
@@ -2896,13 +2923,14 @@ func (m *Manager) relaunchSessionWithPolicyAndGeneration(ctx context.Context, op
 		SessionID:        string(rec.ID),
 		WorkspacePath:    ws.Path,
 		Kind:             rec.Kind,
-		Prompt:           rec.Metadata.Prompt,
+		Prompt:           launchPrompt,
 		SystemPrompt:     systemPrompt,
 		SystemPromptFile: systemPromptFile,
 		Config:           agentConfig,
 		Permissions:      agentConfig.Permissions,
+		NativeSessionID:  freshNativeSessionID,
 	}
-	afterStartPrompt := rec.Metadata.Prompt
+	afterStartPrompt := launchPrompt
 	if delivery == ports.PromptDeliveryAfterStart && mode != RestoreModeNative {
 		afterStartPrompt, err = buildAfterStartPrompt(ctx, agent, launchCfg)
 		if err != nil {
@@ -3363,6 +3391,9 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 // restored input fence before the API accepts input.
 func (m *Manager) ReconcileStartupSafety(ctx context.Context) error {
 	m.startTransitionMessageDispatcher(ctx)
+	if err := m.reconcileInterruptedTUIProviderSwitches(ctx); err != nil {
+		return fmt.Errorf("reconcile: TUI provider switches: %w", err)
+	}
 	_, err := m.recoverInterruptedInterfaceTransitions(ctx)
 	if err != nil {
 		return fmt.Errorf("reconcile: interface transitions: %w", err)
@@ -5690,10 +5721,14 @@ func nativeConversationMissing(ctx context.Context, agent ports.Agent, ref ports
 // transitions also use it when an adapter proves its reserved id has no
 // persisted history, both for preflight and for the actual target launch.
 func freshLaunchArgv(ctx context.Context, agent ports.Agent, id domain.SessionID, workspacePath string, meta domain.SessionMetadata, systemPrompt, systemPromptFile string, agentConfig ports.AgentConfig, kind domain.SessionKind, dataDir string, allowPromptless bool) ([]string, ports.PromptDeliveryStrategy, RestoreMode, error) {
+	return freshLaunchArgvWithPrompt(ctx, agent, id, workspacePath, meta, systemPrompt, systemPromptFile, agentConfig, kind, dataDir, allowPromptless, meta.Prompt, "")
+}
+
+func freshLaunchArgvWithPrompt(ctx context.Context, agent ports.Agent, id domain.SessionID, workspacePath string, meta domain.SessionMetadata, systemPrompt, systemPromptFile string, agentConfig ports.AgentConfig, kind domain.SessionKind, dataDir string, allowPromptless bool, prompt, nativeSessionID string) ([]string, ports.PromptDeliveryStrategy, RestoreMode, error) {
 	// A saved prompt is replayed fresh. An orchestrator is promptless by design
 	// and relaunches with the system prompt only. A promptless WORKER has no task
 	// and no session id to restore from: do not blank-relaunch it.
-	if meta.Prompt == "" && kind != domain.KindOrchestrator && !allowPromptless {
+	if prompt == "" && kind != domain.KindOrchestrator && !allowPromptless {
 		return nil, "", "", ErrNotResumable
 	}
 	// Fall through to a fresh launch. Command-delivered agents receive
@@ -5704,11 +5739,12 @@ func freshLaunchArgv(ctx context.Context, agent ports.Agent, id domain.SessionID
 		SessionID:        string(id),
 		WorkspacePath:    workspacePath,
 		Kind:             kind,
-		Prompt:           meta.Prompt,
+		Prompt:           prompt,
 		SystemPrompt:     systemPrompt,
 		SystemPromptFile: systemPromptFile,
 		Config:           agentConfig,
 		Permissions:      agentConfig.Permissions,
+		NativeSessionID:  nativeSessionID,
 	}
 	delivery, err := agent.GetPromptDeliveryStrategy(ctx, launchCfg)
 	if err != nil {
@@ -5722,7 +5758,7 @@ func freshLaunchArgv(ctx context.Context, agent ports.Agent, id domain.SessionID
 		return nil, "", "", fmt.Errorf("launch command: %w", err)
 	}
 	mode := RestoreModeFresh
-	if meta.Prompt != "" {
+	if prompt != "" {
 		mode = RestoreModeSavedPrompt
 	}
 	return argv, delivery, mode, nil

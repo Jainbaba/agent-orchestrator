@@ -1849,7 +1849,7 @@ WITH RECURSIVE lineage(id, parent_branch_id, replaced_turn_id, provider_scope_id
     JOIN conversation_branches AS parent ON parent.id = lineage.parent_branch_id
     WHERE parent.conversation_id = ?1
 )
-SELECT b.id, b.conversation_id, b.session_id, b.provider_conversation_id, b.parent_branch_id, b.fork_after_turn_id, b.replaced_turn_id, b.replacement_turn_id, b.fork_after_sequence, b.created_at, b.strategy, b.replay_cutoff_sequence, b.replay_truncated, b.provider_scope_id, b.provider_ids_scoped, b.review_id, b.id = c.active_branch_id AS active,
+SELECT b.id, b.conversation_id, b.session_id, b.provider_conversation_id, b.parent_branch_id, b.fork_after_turn_id, b.replaced_turn_id, b.replacement_turn_id, b.fork_after_sequence, b.created_at, b.strategy, b.replay_cutoff_sequence, b.replay_truncated, b.provider_scope_id, b.provider_ids_scoped, b.review_id, b.handoff_note, b.id = c.active_branch_id AS active,
        CAST(COALESCE((
            SELECT lineage.provider_scope_id
            FROM lineage
@@ -1896,6 +1896,7 @@ type SelectConversationBranchRow struct {
 	ProviderScopeID          string
 	ProviderIdsScoped        int64
 	ReviewID                 sql.NullString
+	HandoffNote              string
 	Active                   bool
 	EffectiveProviderScopeID string
 	ProviderBindingID        string
@@ -1921,6 +1922,7 @@ func (q *Queries) SelectConversationBranch(ctx context.Context, arg SelectConver
 		&i.ProviderScopeID,
 		&i.ProviderIdsScoped,
 		&i.ReviewID,
+		&i.HandoffNote,
 		&i.Active,
 		&i.EffectiveProviderScopeID,
 		&i.ProviderBindingID,
@@ -1941,7 +1943,7 @@ WITH RECURSIVE lineages(branch_id, id, parent_branch_id, replaced_turn_id, provi
     JOIN conversation_branches AS parent ON parent.id = lineage.parent_branch_id
     WHERE parent.conversation_id = ?1
 )
-SELECT b.id, b.conversation_id, b.session_id, b.provider_conversation_id, b.parent_branch_id, b.fork_after_turn_id, b.replaced_turn_id, b.replacement_turn_id, b.fork_after_sequence, b.created_at, b.strategy, b.replay_cutoff_sequence, b.replay_truncated, b.provider_scope_id, b.provider_ids_scoped, b.review_id, b.id = c.active_branch_id AS active,
+SELECT b.id, b.conversation_id, b.session_id, b.provider_conversation_id, b.parent_branch_id, b.fork_after_turn_id, b.replaced_turn_id, b.replacement_turn_id, b.fork_after_sequence, b.created_at, b.strategy, b.replay_cutoff_sequence, b.replay_truncated, b.provider_scope_id, b.provider_ids_scoped, b.review_id, b.handoff_note, b.id = c.active_branch_id AS active,
        CAST(COALESCE((
            SELECT lineage.provider_scope_id
            FROM lineages AS lineage
@@ -1983,6 +1985,7 @@ type SelectConversationBranchesRow struct {
 	ProviderScopeID          string
 	ProviderIdsScoped        int64
 	ReviewID                 sql.NullString
+	HandoffNote              string
 	Active                   bool
 	EffectiveProviderScopeID string
 	ProviderBindingID        string
@@ -2014,6 +2017,7 @@ func (q *Queries) SelectConversationBranches(ctx context.Context, conversationID
 			&i.ProviderScopeID,
 			&i.ProviderIdsScoped,
 			&i.ReviewID,
+			&i.HandoffNote,
 			&i.Active,
 			&i.EffectiveProviderScopeID,
 			&i.ProviderBindingID,
@@ -2226,7 +2230,7 @@ WITH RECURSIVE active_path(branch_id, max_sequence, depth) AS (
     ORDER BY path.depth
     LIMIT 1
 ), active_branch AS (
-    SELECT branch.id, branch.conversation_id, branch.session_id, branch.provider_conversation_id, branch.parent_branch_id, branch.fork_after_turn_id, branch.replaced_turn_id, branch.replacement_turn_id, branch.fork_after_sequence, branch.created_at, branch.strategy, branch.replay_cutoff_sequence, branch.replay_truncated, branch.provider_scope_id, branch.provider_ids_scoped, branch.review_id
+    SELECT branch.id, branch.conversation_id, branch.session_id, branch.provider_conversation_id, branch.parent_branch_id, branch.fork_after_turn_id, branch.replaced_turn_id, branch.replacement_turn_id, branch.fork_after_sequence, branch.created_at, branch.strategy, branch.replay_cutoff_sequence, branch.replay_truncated, branch.provider_scope_id, branch.provider_ids_scoped, branch.review_id, branch.handoff_note
     FROM conversations AS conversation
     JOIN conversation_branches AS branch ON branch.id = conversation.active_branch_id
     WHERE conversation.id = ?1

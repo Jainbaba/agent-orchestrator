@@ -25,9 +25,8 @@ import (
 // ControlDeps carries the daemon-control hooks the router exposes, such as the
 // callback that requests a graceful shutdown.
 type ControlDeps struct {
-	RequestShutdown   func()
+	RequestShutdown func()
 }
-
 
 // NewRouterWithControl builds the root router with the standard middleware
 // stack, the API surface, and the daemon-control hooks wired from ControlDeps.
@@ -76,8 +75,6 @@ func NewRouterWithControl(cfg config.Config, log *slog.Logger, termMgr *terminal
 
 	return r
 }
-
-
 
 func previewOriginMiddleware(sessions *controllers.SessionsController) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

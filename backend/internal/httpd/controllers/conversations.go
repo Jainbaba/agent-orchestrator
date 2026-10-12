@@ -65,6 +65,10 @@ type providerSwitchConversationService interface {
 	ProviderSwitchCapabilities(context.Context, domain.SessionID, domain.AgentHarness) (domain.ProviderSwitchCapability, error)
 }
 
+type sessionHistoryService interface {
+	SessionHistory(ctx context.Context, session domain.SessionID, offset, limit int) ([]domain.HandoffTurn, int, error)
+}
+
 type reviewerConversationService interface {
 	ModelsForOwner(context.Context, domain.ConversationOwner) ([]ports.ChatModel, domain.ConversationSettings, error)
 	SetTurnSettingsForOwner(context.Context, domain.ConversationOwner, domain.ConversationSettings) (domain.ConversationSettings, error)
@@ -111,6 +115,7 @@ func (c *ConversationsController) Register(r chi.Router) {
 	r.Post("/sessions/{sessionId}/conversation/mcp/reload", c.reloadMCPServers)
 	r.Post("/sessions/{sessionId}/provider-switch", c.switchProvider)
 	r.Get("/sessions/{sessionId}/provider-switch/capabilities/{targetHarness}", c.providerSwitchCapability)
+	r.Get("/sessions/{sessionId}/history", c.sessionHistory)
 	r.Get("/reviews/{reviewId}/conversation/models", c.reviewModels)
 	r.Patch("/reviews/{reviewId}/conversation/settings", c.reviewSetSettings)
 	r.Get("/reviews/{reviewId}/conversation", c.reviewSnapshot)
@@ -638,6 +643,8 @@ func (c *ConversationsController) setSettings(w http.ResponseWriter, r *http.Req
 			Model:           req.Model,
 			ReasoningEffort: req.ReasoningEffort,
 			ApprovalMode:    approval,
+			FastMode:        req.FastMode,
+			PlanMode:        req.PlanMode,
 		})
 	if err != nil {
 		writeConversationError(w, r, err)
@@ -662,6 +669,7 @@ func conversationModelsResponse(
 			Default:       model.Default,
 			Efforts:       model.Efforts,
 			DefaultEffort: model.DefaultEffort,
+			SupportsFast:  model.FastTier != "",
 		})
 	}
 	return out
@@ -702,6 +710,8 @@ func turnSettingsPayload(settings domain.ConversationSettings) ConversationTurnS
 		Model:           settings.Model,
 		ReasoningEffort: settings.ReasoningEffort,
 		ApprovalMode:    string(settings.ApprovalMode),
+		FastMode:        settings.FastMode,
+		PlanMode:        settings.PlanMode,
 	}
 }
 

@@ -1626,6 +1626,8 @@ func (c *Controller) turnSettings() ports.ChatTurnSettings {
 		Model:    current.Model,
 		Effort:   current.ReasoningEffort,
 		Approval: current.ApprovalMode,
+		Fast:     current.FastMode,
+		Plan:     current.PlanMode,
 	}
 }
 

@@ -20,6 +20,7 @@ const (
 	agentOperationRetire            agentOperationKind = "retire"
 	agentOperationReconcile         agentOperationKind = "reconcile"
 	agentOperationInterfaceRecovery agentOperationKind = "interface_recovery"
+	agentOperationProviderSwitch    agentOperationKind = "provider_switch"
 )
 
 var errAgentOperationInProgress = errors.New("session: another exclusive operation is in progress")
@@ -79,7 +80,6 @@ func (m *Manager) agentOperationActiveLocked(id domain.SessionID) bool {
 	_, deferred := m.deferredInterfaceRecovery[id]
 	return ok || deferred
 }
-
 
 // beginAgentOperation closes input admission before waiting for already-issued
 // leases. Because both actions share agentOpMu, a pane write is either fully
@@ -189,14 +189,6 @@ func (m *Manager) resumeDeferredInterfaceRecoveryLocked(id domain.SessionID) {
 		}
 	}()
 }
-
-
-
-
-
-
-
-
 
 func (m *Manager) beginAgentResume(ctx context.Context, id domain.SessionID) error {
 	if err := m.beginAgentOperation(ctx, id, agentOperationResume); err != nil {

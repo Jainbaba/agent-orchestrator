@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal agent switch layout</title>
+<style>
+  :root {
+    --page: #0b0d10; --surface-1: #111418; --surface-2: #171b21; --surface-3: #1f242c;
+    --border: rgba(255,255,255,.10); --border-strong: rgba(255,255,255,.18);
+    --text: #e8eaed; --text-2: #a4abb5; --text-3: #6f7782;
+    --accent: #6ea8fe; --claude: #d97757; --term: #0d1014;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --page: #f4f5f7; --surface-1: #fafafb; --surface-2: #ffffff; --surface-3: #eef0f3;
+      --border: rgba(0,0,0,.10); --border-strong: rgba(0,0,0,.18);
+      --text: #16181c; --text-2: #555c66; --text-3: #8a919b;
+      --accent: #1f6fe0; --term: #f0f1f4;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 16px 40px; background: var(--page); color: var(--text);
+         font: 13px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 13px; font-weight: 600; margin: 30px 0 4px; }
+  p { margin: 0 0 14px; color: var(--text-2); }
+  .opt { margin: 0 0 18px; }
+  .opt-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .tag { font-size: 11px; font-weight: 600; color: var(--accent); }
+  .pick { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); }
+  .why { font-size: 12px; color: var(--text-2); margin: 6px 0 0; }
+  .frame { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .row { display: flex; align-items: center; }
+  .topbar { gap: 6px; height: 36px; padding: 0 10px 0 0; border-bottom: 1px solid var(--border); }
+  .tab { gap: 7px; height: 36px; padding: 0 10px; border-bottom: 2px solid var(--text-2); min-width: 0; }
+  .tab span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tools { margin-left: auto; gap: 12px; color: var(--text-3); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; color: var(--text-2); }
+  .btn.hl { outline: 1.5px solid var(--accent); color: var(--text); }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
+  .seg .btn { border-radius: 0; }
+  .seg .on { background: var(--surface-3); color: var(--text); }
+  .seg.hl { outline: 1.5px solid var(--accent); }
+  .pill { background: var(--accent); color: #fff; font-size: 11px; padding: 3px 9px; border-radius: 6px; }
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .mark { width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.6px solid currentColor; }
+  .mark.c { border: 0; background: var(--claude); clip-path: polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); border-radius: 0; }
+  .chip { gap: 6px; height: 26px; padding: 0 8px; border-radius: 7px; background: var(--surface-3); white-space: nowrap; }
+  .chip.hl { outline: 1.5px solid var(--accent); }
+  .muted { color: var(--text-3); }
+  .info { gap: 7px; height: 26px; padding: 0 4px 0 8px; border-radius: 7px; border: 1px solid var(--border-strong); font-size: 12px; white-space: nowrap; }
+  .go { font-size: 11px; padding: 2px 9px; border-radius: 5px; background: var(--text); color: var(--surface-2); font-weight: 600; }
+  .agentbar { gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border); }
+  .term { background: var(--term); padding: 10px 12px; font: 11.5px/1.6 ui-monospace, Menlo, monospace; color: var(--text-2); }
+  .composer { margin: 12px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 12px; }
+  .bar { gap: 10px; padding: 7px 10px; }
+  .send { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; justify-content: center; }
+  .picker { width: 250px; margin: 6px 0 0 10px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; font-size: 12px; }
+  .ptabs { gap: 14px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+  .ptabs .cur { color: var(--text); box-shadow: 0 9px 0 -7px var(--text); }
+  .pnote { padding: 9px 12px; color: var(--text-2); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cap { font-size: 11px; color: var(--text-3); padding: 5px 10px 0; }
+  ul { margin: 6px 0 0; padding-left: 18px; color: var(--text-2); }
+  li { margin: 3px 0; } b { color: var(--text); font-weight: 600; }
+  @media (max-width: 620px) { .two { grid-template-columns: 1fr; } .hide-s { display: none; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></symbol>
+  <symbol id="chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></symbol>
+  <symbol id="code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></symbol>
+  <symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+</svg>
+
+<main>
+<h1>Chat ⇄ terminal switch, and agent switch in the terminal</h1>
+<p>Box-level mock-up. The ⋮ menu on the session tab goes away in every option; "Switch agent" leaves it for good. Blue outline marks the new piece.</p>
+
+<h2>Part 1 · Where the chat ⇄ terminal switch goes</h2>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">A · In the session tab</span><span class="pick">my pick</span></div>
+  <div class="frame">
+    <div class="row topbar">
+      <div class="row tab"><i class="mark"></i><span>picker test 2</span><span class="btn hl" title="Switch to terminal"><svg class="i"><use href="#term"/></svg></span></div>
+      <div class="row tools"><svg class="i"><use href="#plus"/></svg><svg class="i hide-s"><use href="#code"/></svg><svg class="i"><use href="#play"/></svg><span class="pill">Orchestrator</span></div>
+    </div>
+  </div>
+  <p class="why">One icon where ⋮ was. Chat shows the terminal icon; the terminal shows the chat icon. Same spot in both views.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">B · Two-way toggle with the top-bar tools</span></div>
+  <div class="frame">
+    <div class="row topbar">
+      <div class="row tab"><i class="mark"></i><span>picker test 2</span></div>
+      <div class="row tools">
+        <span class="seg hl"><span class="btn on"><svg class="i"><use href="#chat"/></svg></span><span class="btn"><svg class="i"><use href="#term"/></svg></span></span>
+        <svg class="i"><use href="#plus"/></svg><svg class="i hide-s"><use href="#code"/></svg><svg class="i"><use href="#play"/></svg><span class="pill">Orchestrator</span>
+      </div>
+    </div>
+  </div>
+  <p class="why">Shows both views with the current one lit. Clearest, but adds one more control to a crowded tool row.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">C · Next to the agent chip</span></div>
+  <div class="two">
+    <div class="frame">
+      <div class="cap">Chat</div>
+      <div class="composer"><div style="padding:9px 10px" class="muted">Message the agent…</div>
+        <div class="row bar"><svg class="i"><use href="#plus"/></svg><span class="row muted" style="gap:4px"><svg class="i"><use href="#shield"/></svg><span class="hide-s">Bypass</span></span>
+          <span class="btn hl" style="margin-left:auto"><svg class="i"><use href="#term"/></svg></span>
+          <span class="row chip"><i class="mark"></i>GPT-6.1-Sol</span><span class="row send"><svg class="i"><use href="#up"/></svg></span></div></div>
+    </div>
+    <div class="frame">
+      <div class="cap">Terminal</div>
+      <div class="row agentbar"><span class="row chip"><i class="mark"></i>Codex<svg class="i"><use href="#down"/></svg></span><span class="btn hl" style="margin-left:auto"><svg class="i"><use href="#chat"/></svg></span></div>
+      <div class="term">› Ask Codex to do anything</div>
+    </div>
+  </div>
+  <p class="why">Keeps the tab clean, but the switch sits at the bottom in chat and at the top in the terminal.</p>
+</div>
+
+<h2>Part 2 · Agent switch in the terminal</h2>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">T1 · Bar under the top bar</span><span class="pick">as you described</span></div>
+  <div class="frame">
+    <div class="row topbar">
+      <div class="row tab"><i class="mark"></i><span>f5 PRa codex terminal 0</span><span class="btn"><svg class="i"><use href="#chat"/></svg></span></div>
+      <div class="row tools"><svg class="i"><use href="#plus"/></svg><svg class="i"><use href="#play"/></svg><span class="pill">Orchestrator</span></div>
+    </div>
+    <div class="row agentbar">
+      <span class="row chip hl"><i class="mark"></i>Codex<span class="muted hide-s">GPT-6.1-Sol · Low</span><svg class="i"><use href="#down"/></svg></span>
+      <span class="row info hl"><svg class="i"><use href="#right"/></svg><i class="mark c"></i>Claude Code<span class="muted hide-s">Opus 5.5 · High</span><span class="go">Switch</span><span class="btn"><svg class="i"><use href="#x"/></svg></span></span>
+    </div>
+    <div class="term">I'm here and have taken over this session.<br>› Ask Codex to do anything</div>
+  </div>
+  <p class="why">The chip always shows the running agent. Picking another agent adds the box beside it; nothing changes until Switch is pressed.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">T2 · Chip in the top bar, no extra row</span></div>
+  <div class="frame">
+    <div class="row topbar">
+      <div class="row tab"><i class="mark"></i><span>f5 PRa codex…</span><span class="btn"><svg class="i"><use href="#chat"/></svg></span></div>
+      <span class="row chip hl"><i class="mark"></i>Codex<svg class="i"><use href="#down"/></svg></span>
+      <span class="row info hl hide-s"><svg class="i"><use href="#right"/></svg><i class="mark c"></i>Claude Code<span class="go">Switch</span><span class="btn"><svg class="i"><use href="#x"/></svg></span></span>
+      <div class="row tools"><svg class="i"><use href="#plus"/></svg><svg class="i"><use href="#play"/></svg><span class="pill">Orchestrator</span></div>
+    </div>
+    <div class="term">I'm here and have taken over this session.<br>› Ask Codex to do anything</div>
+  </div>
+  <p class="why">Gives the terminal its full height back, but the top bar gets tight on a narrow window.</p>
+</div>
+
+<div class="opt">
+  <div class="opt-head"><span class="tag">The picker in the terminal (both options)</span></div>
+  <div class="two">
+    <div class="frame" style="padding-bottom:10px">
+      <div class="cap">Running agent's tab: read-only</div>
+      <div class="picker"><div class="row ptabs"><i class="mark cur"></i><i class="mark c"></i><i class="mark"></i><i class="mark"></i></div>
+        <div class="pnote">Codex is running here.<br>Change its model with <b>/model</b> in the terminal.</div></div>
+    </div>
+    <div class="frame" style="padding-bottom:10px">
+      <div class="cap">Another agent's tab: same as chat</div>
+      <div class="picker"><div class="row ptabs"><i class="mark"></i><i class="mark c cur"></i><i class="mark"></i><i class="mark"></i></div>
+        <div class="pnote" style="color:var(--text)">Opus 5.5<br><span class="muted">Sonnet 5.5<br>Haiku 4.5</span><br><span style="color:var(--accent)">High</span> <span class="muted">· effort slider</span></div></div>
+    </div>
+  </div>
+</div>
+
+<h2>What stays the same in every option</h2>
+<ul>
+  <li><b>Running agent's model:</b> you were right. AO cannot change it in a terminal; the agent's own /model does. So that tab offers no model choice.</li>
+  <li><b>When the switch happens:</b> a terminal has no "next message" for AO to wait on, so the box carries a Switch button. It is disabled while the agent is working.</li>
+  <li><b>What the chip shows:</b> the agent always; the model only when AO knows it. A model changed with /model in the terminal is not reflected.</li>
+  <li><b>Chat:</b> no change to the chat box; only the ⋮ menu goes.</li>
+</ul>
+</main>
+</body>
+</html>

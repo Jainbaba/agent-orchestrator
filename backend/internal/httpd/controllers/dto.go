@@ -208,7 +208,6 @@ type PRNumberParam struct {
 	PRNumber int `path:"prNumber" description:"Associated pull request number." minimum:"1"`
 }
 
-
 // SessionInterfaceTransitionIDParam is the {transitionId} path parameter for a
 // durable interface handoff.
 type SessionInterfaceTransitionIDParam struct {
@@ -427,11 +426,6 @@ type SpawnSessionResponse struct {
 	PromptBytes       int         `json:"promptBytes"`
 	SystemPromptBytes int         `json:"systemPromptBytes"`
 }
-
-
-
-
-
 
 // StageSessionAttachmentsRequest attaches files to a session that is already
 // running, for a caller that will name the returned paths in its next message.
@@ -1256,6 +1250,9 @@ type SetActivityRequest struct {
 	AgentSessionID               string                              `json:"agentSessionId,omitempty" description:"Native agent session identifier used to resume its transcript."`
 	LatestUserPrompt             string                              `json:"latestUserPrompt,omitempty" maxLength:"16384" description:"Latest real user prompt exposed by the provider hook."`
 	LatestAssistantUpdate        string                              `json:"latestAssistantUpdate,omitempty" maxLength:"16384" description:"Latest assistant update exposed by the provider hook."`
+	FinalAssistantMessage        string                              `json:"finalAssistantMessage,omitempty" maxLength:"16384" description:"The agent's final message of the turn, kept for terminal turn history only."`
+	TurnUserRequest              string                              `json:"turnUserRequest,omitempty" maxLength:"16384" description:"The user's request for the turn, kept for terminal turn history only."`
+	Harness                      string                              `json:"harness,omitempty" maxLength:"64" description:"The agent whose hook sent this signal. A signal from an agent the session no longer runs is ignored."`
 	ConversationCheckpointOrigin domain.ConversationCheckpointOrigin `json:"conversationCheckpointOrigin,omitempty" enum:"human,coordination" description:"Whether the main-turn boundary came from a human or AO coordination."`
 	CoordinationID               string                              `json:"coordinationId,omitempty" description:"Opaque identity of an AO-authored semantic prompt accepted by the native agent."`
 	ProviderTurnID               string                              `json:"providerTurnId,omitempty" description:"Native main-turn identity reported by the hook, when supported."`
@@ -2329,6 +2326,12 @@ type SendConversationMessageRequest struct {
 type ProviderSwitchRequest struct {
 	TargetHarness  string `json:"targetHarness"`
 	IdempotencyKey string `json:"idempotencyKey,omitempty"`
+	// Model is the target provider's model id. Empty uses its default.
+	Model string `json:"model,omitempty" maxLength:"200"`
+	// Effort is the target's reasoning effort. Empty uses its default.
+	Effort string `json:"effort,omitempty" maxLength:"64"`
+	// FastMode starts the target on its faster tier, where its model has one.
+	FastMode bool `json:"fastMode,omitempty"`
 }
 
 // ProviderSwitchResponse returns only the published provider identities; the
@@ -2353,6 +2356,28 @@ type ProviderSwitchCapabilityResponse struct {
 // ProviderSwitchTargetParam names a target provider in the capability route.
 type ProviderSwitchTargetParam struct {
 	TargetHarness string `path:"targetHarness" description:"Registered Chat provider harness to evaluate."`
+}
+
+// SessionHistoryQuery pages GET /api/v1/sessions/{sessionId}/history.
+type SessionHistoryQuery struct {
+	Offset int `query:"offset,omitempty" minimum:"0" description:"Number of newest turns to skip."`
+	Limit  int `query:"limit,omitempty" minimum:"1" maximum:"50" description:"Maximum turns to return. Defaults to 10."`
+}
+
+// SessionHistoryTurn is one turn of a session, whichever UI it happened in:
+// the user's request and the agent's final response.
+type SessionHistoryTurn struct {
+	UserRequest   string    `json:"userRequest"`
+	AgentResponse string    `json:"agentResponse"`
+	At            time.Time `json:"at"`
+	Harness       string    `json:"harness,omitempty"`
+}
+
+// SessionHistoryResponse is one page of a session's turns, newest first.
+type SessionHistoryResponse struct {
+	Turns  []SessionHistoryTurn `json:"turns"`
+	Total  int                  `json:"total"`
+	Offset int                  `json:"offset"`
 }
 
 // ConversationImageContentRequest is a native raster image prompt block.
@@ -2529,6 +2554,8 @@ type ConversationModelResponse struct {
 	// order. Empty means the model does not take one.
 	Efforts       []string `json:"efforts,omitempty"`
 	DefaultEffort string   `json:"defaultEffort,omitempty"`
+	// SupportsFast reports that the model can run on the provider's faster tier.
+	SupportsFast bool `json:"supportsFast,omitempty"`
 }
 
 // ConversationSkillsResponse is the named skills the provider will let this
@@ -2563,6 +2590,10 @@ type ConversationTurnSettingsPayload struct {
 	Model           string `json:"model,omitempty"`
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
 	ApprovalMode    string `json:"approvalMode,omitempty" enum:"default,accept-edits,auto,bypass-permissions"`
+	// FastMode asks for the provider's faster tier on models that offer one.
+	FastMode bool `json:"fastMode,omitempty"`
+	// PlanMode asks the provider to plan rather than act, where it supports that.
+	PlanMode bool `json:"planMode,omitempty"`
 }
 
 // ResolveConversationApprovalRequest answers a pending approval. DecisionID must

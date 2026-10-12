@@ -3,6 +3,8 @@ package controllers
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -31,6 +33,9 @@ func (c *ConversationsController) switchProvider(w http.ResponseWriter, r *http.
 	}
 	result, err := svc.SwitchProvider(r.Context(), domain.SessionID(chi.URLParam(r, "sessionId")), domain.ProviderSwitchRequest{
 		TargetHarness: domain.AgentHarness(req.TargetHarness), IdempotencyKey: req.IdempotencyKey,
+		Model:    capActivityMeta(strings.TrimSpace(domain.SanitizeControlChars(req.Model))),
+		Effort:   capActivityMeta(strings.TrimSpace(domain.SanitizeControlChars(req.Effort))),
+		FastMode: req.FastMode,
 	})
 	if err != nil {
 		writeProviderSwitchError(w, r, err)
@@ -77,4 +82,46 @@ func writeProviderSwitchError(w http.ResponseWriter, r *http.Request, err error)
 	envelope.WriteAPIError(w, r, status, category, "PROVIDER_SWITCH_"+string(refusal.Kind), refusal.Error(), map[string]any{
 		"retryable": refusal.Kind.Retryable(),
 	})
+}
+
+const (
+	sessionHistoryDefaultLimit = 10
+	sessionHistoryMaxLimit     = 50
+)
+
+// sessionHistory serves `ao session history`: the turns AO holds for a session
+// in full, newest first, so an agent that took over can read what its handoff
+// note left out.
+func (c *ConversationsController) sessionHistory(w http.ResponseWriter, r *http.Request) {
+	svc, ok := c.Svc.(sessionHistoryService)
+	if !ok {
+		apispec.NotImplemented(w, r, r.Method, r.URL.Path)
+		return
+	}
+	offset, limit := 0, sessionHistoryDefaultLimit
+	for name, target := range map[string]*int{"offset": &offset, "limit": &limit} {
+		raw := r.URL.Query().Get(name)
+		if raw == "" {
+			continue
+		}
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 0 || (name == "limit" && value == 0) {
+			envelope.WriteAPIError(w, r, http.StatusBadRequest, "validation", "INVALID_HISTORY_PAGE", name+" must be a non-negative integer", nil)
+			return
+		}
+		*target = value
+	}
+	limit = min(limit, sessionHistoryMaxLimit)
+	turns, total, err := svc.SessionHistory(r.Context(), domain.SessionID(chi.URLParam(r, "sessionId")), offset, limit)
+	if err != nil {
+		writeConversationError(w, r, err)
+		return
+	}
+	out := SessionHistoryResponse{Turns: make([]SessionHistoryTurn, 0, len(turns)), Total: total, Offset: offset}
+	for _, turn := range turns {
+		out.Turns = append(out.Turns, SessionHistoryTurn{
+			UserRequest: turn.UserRequest, AgentResponse: turn.AgentResponse, At: turn.At, Harness: string(turn.Harness),
+		})
+	}
+	envelope.WriteJSON(w, http.StatusOK, out)
 }

@@ -37,6 +37,31 @@ function nativeSessionId(context) {
   return typeof sessionId === "string" ? sessionId : "";
 }
 
+// The run's final assistant text, read defensively: the event shape belongs to
+// the agent, and a missing or different field must only mean "no text".
+function finalAssistantText(event) {
+  try {
+    const messages = Array.isArray(event?.messages) ? event.messages : [];
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index];
+      if (message?.role !== "assistant") continue;
+      const content = message.content;
+      const text = typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content
+              .filter((part) => part?.type === "text" && typeof part.text === "string")
+              .map((part) => part.text)
+              .join("\n")
+          : "";
+      if (text.trim()) return text;
+    }
+  } catch {
+    // An unreadable event carries no text.
+  }
+  return "";
+}
+
 export default function aoActivityExtension(prime) {
   let pendingPrompt = "";
 
@@ -59,8 +84,8 @@ export default function aoActivityExtension(prime) {
     report("user-prompt-submit", { prompt }, context.cwd);
   }));
 
-  prime.on("agent_end", bestEffort((_event, context) => {
-    report("stop", {}, context.cwd);
+  prime.on("agent_end", bestEffort((event, context) => {
+    report("stop", { last_assistant_message: finalAssistantText(event) }, context.cwd);
   }));
 
   prime.on("session_shutdown", bestEffort((event, context) => {

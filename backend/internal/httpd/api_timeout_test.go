@@ -24,8 +24,8 @@ func remainingRequestBudget(ctx context.Context) time.Duration {
 
 type timeoutProbeSessionService struct {
 	controllers.SessionService
-	uploadBudget  chan time.Duration
-	sendBudget    chan time.Duration
+	uploadBudget chan time.Duration
+	sendBudget   chan time.Duration
 }
 
 func (s *timeoutProbeSessionService) StageAttachments(ctx context.Context, _ domain.SessionID, _ []ports.SpawnAttachment) ([]string, error) {
