@@ -60,6 +60,8 @@ type NativeProviderImport struct {
 	Fingerprint string `json:"fingerprint"`
 	AccountID   string `json:"account_id"`
 	Email       string `json:"email,omitempty"`
+	// Device is the login this computer has now, when that is another account AO already holds.
+	Device string `json:"device,omitempty"`
 }
 
 // ProviderAccountState is everything Account Manager stores. Defaults maps a

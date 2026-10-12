@@ -219,12 +219,14 @@ func TestALoginAOAlreadyKnowsIsNeverCopiedAgain(t *testing.T) {
 	}
 	t.Run("an account added by hand already has that owner", func(t *testing.T) {
 		h := setup(t)
-		h.signIn("claude", "alice@example.com")
+		alice := h.signIn("claude", "alice@example.com")
 		h.helper.native["claude"] = owned("Alice@Example.com")
 		before := h.store.get()
 		h.svc.importNative(h.ctx, true)
-		if h.unchanged(before, "a login AO already holds"); len(h.helper.imports) != 0 {
-			t.Fatalf("copied: %v", h.helper.imports)
+		// Only the note of whose login this computer has is written; it carries the Device mark.
+		before.NativeImports = map[string]domain.NativeProviderImport{"claude": {Device: "alice@example.com"}}
+		if h.unchanged(before, "a login AO already holds"); len(h.helper.imports) != 0 || !h.view(alice).Global {
+			t.Fatalf("copied: %v, marked: %t", h.helper.imports, h.view(alice).Global)
 		}
 	})
 	t.Run("copied once, then left alone through renewals, sign-out and removal", func(t *testing.T) {
@@ -260,4 +262,21 @@ func TestALoginAOAlreadyKnowsIsNeverCopiedAgain(t *testing.T) {
 			t.Fatalf("imports=%v receipt=%+v", h.helper.imports, receipt)
 		}
 	})
+}
+
+func TestTheGlobalMarkMovesWhenThisComputerLogsInAsAnotherAccountAOHolds(t *testing.T) {
+	h := setup(t)
+	mine := h.signIn("claude", "me@example.com")
+	other := h.signIn("claude", "Other@Example.com")
+	for _, step := range []struct{ login, marked, unmarked string }{{"me@example.com", mine, other}, {"other@example.com", other, mine}, {"me@example.com", mine, other}} {
+		h.helper.native["claude"] = nativeSource{fingerprint: "id:" + step.login, login: signIn("claude", step.login)}
+		h.svc.importNative(h.ctx, true)
+		if !h.view(step.marked).Global || h.view(step.unmarked).Global {
+			t.Fatalf("logged in as %s: marked=%+v unmarked=%+v", step.login, h.view(step.marked), h.view(step.unmarked))
+		}
+	}
+	// Neither login was copied: AO held both already.
+	if state := h.store.get(); len(state.Accounts) != 2 || len(h.helper.deleted) != 0 {
+		t.Fatalf("accounts=%d deleted=%v", len(state.Accounts), h.helper.deleted)
+	}
 }

@@ -590,6 +590,20 @@ func (s *Service) importOne(ctx context.Context, provider string, key bool) {
 	}
 	v, found, err := s.helper.ImportNative(ctx, provider, key, known)
 	byHand := errors.Is(err, ports.ErrProviderAccountConflict)
+	// A login AO already holds is not copied; the Device mark still follows it.
+	if email, signIn := strings.CutPrefix(found, "id:"); signIn && err == nil && v.AuthID == "" {
+		if strings.EqualFold(email, receipt.Email) {
+			email = ""
+		}
+		if !strings.EqualFold(email, receipt.Device) {
+			_ = s.change(ctx, func(st *domain.ProviderAccountState) (string, error) {
+				now := st.NativeImports[provider]
+				now.Device = email
+				st.NativeImports[provider] = now
+				return "", nil
+			})
+		}
+	}
 	if found == "" || !byHand && (err != nil || v.AuthID == "") {
 		return // Nothing new, or nothing readable: the accounts stay as they are.
 	}
@@ -620,7 +634,7 @@ func (s *Service) importOne(ctx context.Context, provider string, key bool) {
 			id = st.Accounts[i].ID
 		}
 		if id != "" {
-			receipt.AccountID, receipt.Email = id, v.Email
+			receipt.AccountID, receipt.Email, receipt.Device = id, v.Email, ""
 			if st.Defaults[provider] == "" || key && i < 0 {
 				makeDefault(st, provider, id)
 			}
@@ -698,7 +712,7 @@ func (s *Service) Accounts(ctx context.Context, usage, refresh bool) ([]domain.P
 	for _, a := range st.Accounts {
 		own := st.NativeImports[a.Provider] // This computer's own login, if it has one: the account it became, or one under the same email.
 		view := domain.ProviderAccountView{ID: a.ID, Provider: a.Provider, DisplayName: a.DisplayName, Email: a.Email, Kind: a.Kind,
-			Global:   st.NativeKeyImports[a.Provider].AccountID == a.ID || !a.APIKey() && (own.AccountID == a.ID || strings.EqualFold(a.Email, cmp.Or(own.Email, "\x00"))),
+			Global:   st.NativeKeyImports[a.Provider].AccountID == a.ID || !a.APIKey() && (own.Device == "" && own.AccountID == a.ID || strings.EqualFold(a.Email, cmp.Or(own.Device, own.Email, "\x00"))),
 			SignedIn: a.SignedIn() && !s.dead(a.AuthID, false), Primary: st.Defaults[a.Provider] == a.ID, Sessions: []string{},
 			Reserved: a.Reserved, OnLimit: a.OnLimit, WarnAt: a.WarnAt}
 		s.memo.Lock()
